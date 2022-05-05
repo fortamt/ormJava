@@ -1,13 +1,37 @@
 package orm;
 
-import client.model.entity.Animal;
-import client.model.entity.Zoo;
+import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.Properties;
 
 public class OrmManager {
+
+    Connection connection;
+
     public OrmManager(String schemaName) {
         // using schemaName as a key find in
         // property file the configuration to connect to DB
+        Properties properties = new Properties();
+        try (InputStream is = ClassLoader.getSystemResourceAsStream("orm.properties")){
+            properties.load(is);
+        } catch (IOException e) {
+            processIoException(e);
+        }
+        String jdbcUrl = properties.getProperty(schemaName + ".dburl");
+        String userName = properties.getProperty(schemaName + ".username");
+        String password = properties.getProperty(schemaName + ".password");
+        try {
+            this.connection = DriverManager.getConnection(jdbcUrl, userName, password);
+        } catch (SQLException e) {
+            processSqlException(e);
+        }
     }
+
+
+
 
     public <T> void persist(T objectToSave) {
         // check if objectToSave.getClass() has @Entity
@@ -37,5 +61,13 @@ public class OrmManager {
 
     public void remove(Object entity) {
         // send delete to DB and set id to null
+    }
+
+    private void processSqlException(SQLException e) {
+        e.printStackTrace();
+    }
+
+    private void processIoException(IOException e) {
+        e.printStackTrace();
     }
 }
