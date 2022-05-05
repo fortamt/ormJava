@@ -4,8 +4,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import orm.annotation.Column;
 import orm.annotation.Entity;
 import orm.annotation.Id;
+
+import java.time.LocalDate;
 
 @Entity
 @Data
@@ -15,4 +18,6 @@ public class Animal {
     @Id
     Long id;
     @NonNull String name;
+    @Column(name="birth_date")
+    LocalDate birthDate;
 }

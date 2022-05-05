@@ -31,7 +31,11 @@ public class OrmManager {
         // and set the fields of the obj <= data from DB
     }
 
-    public void rgisterEntities(Class<?>... entityClasses) {
+    public void registerEntities(Class<?>... entityClasses) {
         // prepare MetaInfo, create the tables in the DB
+    }
+
+    public void remove(Object entity) {
+        // send delete to DB and set id to null
     }
 }

@@ -9,7 +9,7 @@ public class MainClient {
         var ormManager = new OrmManager("H2schema");
         var ormManagerPg = new OrmManager("PGschema");
 
-        ormManager.rgisterEntities(Zoo.class, Animal.class);
+        ormManager.registerEntities(Zoo.class, Animal.class);
 
         var zooOfNewYork = new Zoo("New York Zoo");
         System.out.println(zooOfNewYork.getId()); // null
@@ -31,5 +31,8 @@ public class MainClient {
         System.out.println(theZoo.getName().equals(
                 zooOfNewYork.getName()
         )); // true
+
+        ormManager.remove(theZoo); // send delete to DB and set id to null
+        System.out.println(theZoo.getId()); // null
     }
 }
