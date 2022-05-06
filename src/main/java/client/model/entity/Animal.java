@@ -15,7 +15,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @RequiredArgsConstructor
 public class Animal {
-    @Id
+    @Id(name = "id")
     Long id;
     @NonNull String name;
     @Column(name="birth_date")
