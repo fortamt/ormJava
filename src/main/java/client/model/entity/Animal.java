@@ -17,6 +17,7 @@ import java.time.LocalDate;
 public class Animal {
     @Id(name = "id")
     Long id;
+    @Column(name="name")
     @NonNull String name;
     @Column(name="birth_date")
     LocalDate birthDate;

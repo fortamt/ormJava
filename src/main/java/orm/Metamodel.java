@@ -1,16 +1,19 @@
 package orm;
 
+import orm.annotation.Column;
+import orm.annotation.Id;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import orm.annotation.Id;
-import orm.annotation.Column;
+
 
 public class Metamodel {
-    private Class<?> clss;
+
+    private final Class<?> clss;
 
     public static Metamodel of(Class<?> clss) {
         return new Metamodel(clss);
@@ -20,27 +23,14 @@ public class Metamodel {
         this.clss = clss;
     }
 
-    public IdField getPrimaryKey() {
-
-        Field[] fields = clss.getDeclaredFields();
-        for (Field field : fields) {
-
-            Id primaryKey = field.getAnnotation(Id.class);
-            if (primaryKey != null) {
-                IdField primaryKeyField = new IdField(field);
-                return primaryKeyField;
-            }
-        }
-
-        throw new IllegalArgumentException("No primary key found in class " + clss.getSimpleName());
+    public Class<?> getClassName() {
+        return clss;
     }
 
     public List<ColumnField> getColumns() {
-
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
-
             Column column = field.getAnnotation(Column.class);
             if (column != null) {
                 ColumnField columnField = new ColumnField(field);
@@ -50,9 +40,19 @@ public class Metamodel {
         return columnFields;
     }
 
-    public String buildInsertRequest() {
-        // insert into Person (id, name, age) values (?, ?, ?)
+    public IdField getPrimaryKey() {
+        Field[] fields = clss.getDeclaredFields();
+        for (Field field : fields) {
+            Id primaryKey = field.getAnnotation(Id.class);
+            if (primaryKey != null) {
+                IdField primaryKeyField = new IdField(field);
+                return primaryKeyField;
+            }
+        }
+        throw new IllegalArgumentException("No primary key found in class " + clss.getSimpleName());
+    }
 
+    public String buildInsertSqlRequest() {
         String columnElement = buildColumnNames();
         String questionMarksElement = buildQuestionMarksElement();
 
@@ -60,15 +60,8 @@ public class Metamodel {
                 " (" + columnElement + ") values (" + questionMarksElement + ")";
     }
 
-    public String buildSelectRequest() {
-        // select id, name, age from Person where id = ?
-        String columnElement = buildColumnNames();
-        return "select " + columnElement + " from " + this.clss.getSimpleName() +
-                " where " + getPrimaryKey().getName() + " = ?";
-    }
-
     private String buildQuestionMarksElement() {
-        int numberOfColumns = getColumns().size() + 1;
+        int numberOfColumns = getColumns().size();
         String questionMarksElement =
                 IntStream.range(0, numberOfColumns)
                         .mapToObj(index -> "?")
@@ -77,10 +70,11 @@ public class Metamodel {
     }
 
     private String buildColumnNames() {
-        String primaryKeyColumnName = getPrimaryKey().getName();
-        List<String> columnNames =
-                getColumns().stream().map(ColumnField::getName).collect(Collectors.toList());
-        columnNames.add(0, primaryKeyColumnName);
+        List<String> columnNames = getColumns()
+                        .stream()
+                        .filter(col -> !col.getName().contentEquals(getPrimaryKey().getName()))
+                        .map(ColumnField::getName)
+                        .collect(Collectors.toList());
         String columnElement = String.join(", ", columnNames);
         return columnElement;
     }

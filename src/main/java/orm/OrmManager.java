@@ -1,5 +1,8 @@
 package orm;
 
+import client.model.entity.Animal;
+import client.model.entity.Zoo;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -26,28 +29,36 @@ public class OrmManager {
         String password = properties.getProperty(schemaName + ".password");
         try {
             this.connection = DriverManager.getConnection(jdbcUrl, userName, password);
-//            Statement st = connection.createStatement();
-//            st.executeUpdate("drop table Zoo");
-//            st.executeUpdate("create table Zoo(" +
-//                    "id int not null," +
-//                    "name varchar(40)," +
-//                    "primary key(id));");
         } catch (SQLException e) {
             processSqlException(e);
         }
     }
 
 
-    public <T> void persist(T objectToSave) {
-        Metamodel metamodel = Metamodel.of(objectToSave.getClass());
-        String sql = metamodel.buildInsertRequest();
-        try (PreparedStatement statement = prepareStatementWith(sql).andParameters(objectToSave);) {
+    public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException {
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        String sql = metamodel.buildInsertSqlRequest(); // building sql request like "insert into Zoo (name) values (?)"
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (Zoo.class.equals(metamodel.getClassName())) {
+                ColumnField columnField = metamodel.getColumns().get(0);
+                Field field = columnField.getField();
+                field.setAccessible(true);
+                Object value = field.get(t);
+                statement.setString(1, (String) value);
+                Statement statementForResultSet = connection.createStatement();
+                ResultSet rs = statementForResultSet.executeQuery("select max(id) from Zoo");
+                rs.next();
+                IdField idField = metamodel.getPrimaryKey();
+                Field field1 = idField.getField();
+                field1.setAccessible(true);
+                field1.set(t, Long.valueOf(rs.getInt(1)));
+            } else if (Animal.class.equals(metamodel.getClassName())) {
+                //TODO implement serializing class Animnal to database
+            }
             statement.executeUpdate();
-        } catch (SQLException | IllegalAccessException throwables) {
-            throwables.printStackTrace();
         }
-
     }
+
 
     public void merge(Object objectToSave) {
         // save the object state into the DB table at
@@ -81,52 +92,7 @@ public class OrmManager {
         e.printStackTrace();
     }
 
-    private PreparedStatementWrapper prepareStatementWith(String sql) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(sql);
-        return new PreparedStatementWrapper(statement);
-    }
 
-    private class PreparedStatementWrapper {
-
-        private PreparedStatement statement;
-
-        public PreparedStatementWrapper(PreparedStatement statement) {
-            this.statement = statement;
-        }
-
-        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
-            Metamodel metamodel = Metamodel.of(t.getClass());
-            Class<?> primaryKeyType = metamodel.getPrimaryKey().getType();
-            if (primaryKeyType == Long.class) {
-                Long id = idGenerator.incrementAndGet();
-                statement.setLong(1, id);
-                Field field = metamodel.getPrimaryKey().getField();
-                field.setAccessible(true);
-                field.set(t, id);
-            }
-            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getColumns().get(columnIndex);
-                Class<?> fieldType = columnField.getType();
-                Field field = columnField.getField();
-                field.setAccessible(true);
-                Object value = field.get(t);
-                if (fieldType == int.class) {
-                    statement.setInt(columnIndex + 2, (int)value);
-                } else if (fieldType == String.class) {
-                    statement.setString(columnIndex + 2, (String)value);
-                }
-            }
-            return statement;
-        }
-
-        public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
-            if (primaryKey.getClass() == Long.class) {
-                statement.setLong(1, (Long)primaryKey);
-            }
-            return statement;
-        }
-
-    }
 
 
 }
