@@ -112,4 +112,10 @@ public class Metamodel {
                 ", primary key ("+id+")" +
                 ")";
     }
+
+    public String buildSelectRequest() {
+        // select id, name, age from Person where id = ?
+        return "select * from " + this.tableName.name() +
+                " where " + getPrimaryKey().getName() + " = ?";
+    }
 }
