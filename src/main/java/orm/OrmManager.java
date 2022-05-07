@@ -95,7 +95,6 @@ public class OrmManager {
         }
     }
 
-
     public void merge(Object objectToSave) {
         // save the object state into the DB table at
         // the row that has PK = object id (field marked as @Id)
@@ -114,6 +113,15 @@ public class OrmManager {
 
     public void registerEntities(Class<?>... entityClasses) {
         // prepare MetaInfo, create the tables in the DB
+        for(Class clss : entityClasses){
+            Metamodel metamodel = Metamodel.of(clss);
+            String sql = metamodel.buildTableInDbRequest();
+            try (Statement statement = connection.createStatement()){
+                statement.execute(sql);
+            } catch (SQLException e) {
+                processSqlException(e);
+            }
+        }
     }
 
     public void remove(Object entity) {
