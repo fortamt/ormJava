@@ -1,18 +1,16 @@
 package orm;
 
-import client.model.entity.Animal;
-import client.model.entity.Zoo;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class OrmManager {
 
-    AtomicLong idGenerator = new AtomicLong(0L);
     Connection connection;
 
     public OrmManager(String schemaName) {
@@ -38,24 +36,58 @@ public class OrmManager {
     public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         String sql = metamodel.buildInsertSqlRequest(); // building sql request like "insert into Zoo (name) values (?)"
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            if (Zoo.class.equals(metamodel.getClassName())) {
-                ColumnField columnField = metamodel.getColumns().get(0);
+        try (PreparedStatement statement = prepareStatementWith(sql).andParameters(t)) {
+            statement.executeUpdate();
+            setIdToObjectAfterPersisting(t, statement);
+        }
+    }
+
+    private PreparedStatementWrapper prepareStatementWith(String sql) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+        return new PreparedStatementWrapper(statement);
+    }
+
+    private class PreparedStatementWrapper {
+
+        private PreparedStatement statement;
+
+        public PreparedStatementWrapper(PreparedStatement statement) {
+            this.statement = statement;
+        }
+
+        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+            Metamodel metamodel = Metamodel.of(t.getClass());
+            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumns().get(columnIndex);
+                Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
                 field.setAccessible(true);
                 Object value = field.get(t);
-                statement.setString(1, (String) value);
-                Statement statementForResultSet = connection.createStatement();
-                ResultSet rs = statementForResultSet.executeQuery("select max(id) from Zoo");
-                rs.next();
-                IdField idField = metamodel.getPrimaryKey();
-                Field field1 = idField.getField();
-                field1.setAccessible(true);
-                field1.set(t, Long.valueOf(rs.getInt(1)));
-            } else if (Animal.class.equals(metamodel.getClassName())) {
-                //TODO implement serializing class Animnal to database
+                if (fieldType == int.class || fieldType == long.class) {
+                    statement.setInt(columnIndex + 1, (int) value);
+                } else if(fieldType == double.class || fieldType == float.class) {
+                    statement.setFloat(columnIndex + 1, (float) value);
+                } else if (fieldType == String.class) {
+                    statement.setString(columnIndex + 1, (String) value);
+                } else if (fieldType == LocalDate.class) {
+                    LocalDate localDate = (LocalDate) value;
+                    statement.setDate(columnIndex + 1, (Date) Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+                }
             }
-            statement.executeUpdate();
+            return statement;
+        }
+    }
+
+    private <T> void setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        ResultSet resultSet = ps.getGeneratedKeys();
+        if (resultSet.next()) {
+            IdField idField = metamodel.getPrimaryKey();
+            Field field1 = idField.getField();
+            field1.setAccessible(true);
+            field1.set(t, (long) resultSet.getInt(1));
+        } else {
+            throw new SQLException();
         }
     }
 

@@ -72,7 +72,6 @@ public class Metamodel {
     private String buildColumnNames() {
         List<String> columnNames = getColumns()
                         .stream()
-                        .filter(col -> !col.getName().contentEquals(getPrimaryKey().getName()))
                         .map(ColumnField::getName)
                         .collect(Collectors.toList());
         String columnElement = String.join(", ", columnNames);
