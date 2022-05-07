@@ -31,8 +31,6 @@ public class OrmManager {
     }
 
 
-
-
     public <T> void persist(T objectToSave) {
         // check if objectToSave.getClass() has @Entity
         // save the object to the DB table
