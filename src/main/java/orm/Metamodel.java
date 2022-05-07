@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 
-
 public class Metamodel {
 
     private final Class<?> clss;
@@ -71,9 +70,9 @@ public class Metamodel {
 
     private String buildColumnNames() {
         List<String> columnNames = getColumns()
-                        .stream()
-                        .map(ColumnField::getName)
-                        .collect(Collectors.toList());
+                .stream()
+                .map(ColumnField::getName)
+                .collect(Collectors.toList());
         String columnElement = String.join(", ", columnNames);
         return columnElement;
     }

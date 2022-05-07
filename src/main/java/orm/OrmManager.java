@@ -17,7 +17,7 @@ public class OrmManager {
         // using schemaName as a key find in
         // property file the configuration to connect to DB
         Properties properties = new Properties();
-        try (InputStream is = ClassLoader.getSystemResourceAsStream("orm.properties")){
+        try (InputStream is = ClassLoader.getSystemResourceAsStream("orm.properties")) {
             properties.load(is);
         } catch (IOException e) {
             processIoException(e);
@@ -65,7 +65,7 @@ public class OrmManager {
                 Object value = field.get(t);
                 if (fieldType == int.class || fieldType == long.class) {
                     statement.setInt(columnIndex + 1, (int) value);
-                } else if(fieldType == double.class || fieldType == float.class) {
+                } else if (fieldType == double.class || fieldType == float.class) {
                     statement.setFloat(columnIndex + 1, (float) value);
                 } else if (fieldType == String.class) {
                     statement.setString(columnIndex + 1, (String) value);
@@ -123,8 +123,6 @@ public class OrmManager {
     private void processIoException(IOException e) {
         e.printStackTrace();
     }
-
-
 
 
 }
