@@ -1,4 +1,4 @@
-package orm;
+package orm.util;
 
 import orm.annotation.Column;
 import orm.annotation.Id;
