@@ -1,6 +1,10 @@
 package orm;
 
 
+import orm.util.ColumnField;
+import orm.util.IdField;
+import orm.util.Metamodel;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
