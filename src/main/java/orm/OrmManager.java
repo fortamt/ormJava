@@ -154,9 +154,6 @@ public class OrmManager {
             } else if (columnType == String.class) {
                 String value = resultSet.getString(columnName);
                 field.set(t, value);
-            } else if (columnType == LocalDate.class) {
-                Date value = resultSet.getDate(columnName);
-                field.set(t, value);
             }
         }
 
