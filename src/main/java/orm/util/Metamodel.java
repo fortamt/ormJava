@@ -119,11 +119,34 @@ public class Metamodel {
 
     public String buildSelectByIdSqlRequest() {
         return "select * from " + clss.getSimpleName() + " where id = ?";
+    }
 
     public String buildSelectRequest() {
         // select id, name, age from Person where id = ?
         return "select * from " + this.tableName.name() +
                 " where " + getPrimaryKey().getName() + " = ?";
 
+    }
+
+    public String buildMergeRequest() {
+        String table = tableName.name();
+        if(Objects.equals(table, "")){
+            table = this.clss.getName();
+        }
+        String id = getPrimaryKey().getName();
+        String columns = getColumns().stream()
+                .map(el -> {
+                    String result = "";
+                    if(el.getName().equals("")){
+                        result+= el.getField().getName() + " = ? ";
+                    } else {
+                        result+= el.getName()+ " = ? ";
+                    }
+
+                    return result;
+                })
+                .collect(Collectors.joining(", "));
+
+        return "UPDATE " + table + " SET " + columns + " WHERE " +id+ " = ?";
     }
 }

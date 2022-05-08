@@ -24,19 +24,19 @@ public class MainClient {
         Zoo theZoo = ormManager.load(id, Zoo.class);
         System.out.println(theZoo);
 
-//        zooOfNewYork.setName("Zoo of New York");
-//        ormManager.merge(zooOfNewYork);
-//
-//        System.out.println(theZoo.getName().equals(
-//                zooOfNewYork.getName()
-//        )); // true if cache is used false if new object is loaded
-//
-//        ormManager.update(theZoo);
-//        System.out.println(theZoo.getName().equals(
-//                zooOfNewYork.getName()
-//        )); // true
-//
-//        ormManager.remove(theZoo); // send delete to DB and set id to null
-//        System.out.println(theZoo.getId()); // null
+        zooOfNewYork.setName("Zoo of New York");
+        ormManager.merge(zooOfNewYork);
+
+        System.out.println(theZoo.getName().equals(
+                zooOfNewYork.getName()
+        )); // true if cache is used false if new object is loaded
+
+        ormManager.update(theZoo);
+        System.out.println(theZoo.getName().equals(
+                zooOfNewYork.getName()
+        )); // true
+
+        ormManager.remove(theZoo); // send delete to DB and set id to null
+        System.out.println(theZoo.getId()); // null
     }
 }

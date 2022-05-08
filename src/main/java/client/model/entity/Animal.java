@@ -21,8 +21,4 @@ public class Animal {
     @Column(name="birth_date")
     LocalDate birthDate;
 
-    public Animal(String name, LocalDate localDate) {
-        this.name = name;
-        this.birthDate = localDate;
-    }
 }
