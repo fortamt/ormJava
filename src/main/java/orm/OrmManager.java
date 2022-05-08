@@ -9,8 +9,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.sql.*;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Properties;
 
 public class OrmManager {
@@ -75,7 +77,8 @@ public class OrmManager {
                     statement.setString(columnIndex + 1, (String) value);
                 } else if (fieldType == LocalDate.class) {
                     LocalDate localDate = (LocalDate) value;
-                    statement.setDate(columnIndex + 1, (Date) Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+                    java.util.Date date =  Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
             return statement;
@@ -109,6 +112,37 @@ public class OrmManager {
     public void update(Object obj) {
         // go to DB to table = obj.getClass at PK = obj id
         // and set the fields of the obj <= data from DB
+        Metamodel metamodel = Metamodel.of(obj.getClass());
+        try(PreparedStatement ps = connection.prepareStatement(metamodel.buildSelectByIdSqlRequest())) {
+            IdField idField = metamodel.getPrimaryKey();
+            Field fieldForId = idField.getField();
+            fieldForId.setAccessible(true);
+            Long idToSelect = (Long) fieldForId.get(obj);
+            ps.setInt(1, Math.toIntExact(idToSelect));
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            for(var el: metamodel.getColumns()) {
+                ColumnField columnField = el;
+                Class<?> fieldType = columnField.getType();
+                Field field = columnField.getField();
+                field.setAccessible(true);
+                if (fieldType == int.class || fieldType == long.class) {
+                    field.set(obj, rs.getInt(el.getName()));
+                } else if (fieldType == float.class) {
+                    field.set(obj, rs.getFloat(el.getName()));
+                } else if (fieldType == double.class) {
+                    field.set(obj, rs.getDouble(el.getName()));
+                } else if (fieldType == String.class) {
+                    field.set(obj, rs.getString(el.getName()));
+                } else if (fieldType == LocalDate.class) {
+                    Date dateSql = rs.getDate(el.getName());
+                    LocalDate localDate = dateSql.toLocalDate();
+                    field.set(obj, localDate);
+                }
+            }
+        } catch (SQLException | IllegalAccessException throwables) {
+            throwables.printStackTrace();
+        }
     }
 
     public void registerEntities(Class<?>... entityClasses) {
@@ -127,8 +161,7 @@ public class OrmManager {
     public void remove(Object entity) {
         // send delete to DB and set id to null
         Metamodel metamodel = Metamodel.of(entity.getClass());
-        String sql = metamodel.buildRemoveSqlRequest();
-        try(PreparedStatement st = connection.prepareStatement(sql)) {
+        try(PreparedStatement st = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
             IdField idField = metamodel.getPrimaryKey();
             Field field = idField.getField();
             field.setAccessible(true);

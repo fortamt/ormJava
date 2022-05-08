@@ -114,7 +114,10 @@ public class Metamodel {
     }
 
     public String buildRemoveSqlRequest() {
-        String sql = "delete from " + clss.getSimpleName() + " where id = ?";
-        return sql;
+        return "delete from " + clss.getSimpleName() + " where " + getPrimaryKey().getName() + " = ?";
+    }
+
+    public String buildSelectByIdSqlRequest() {
+        return "select * from " + clss.getSimpleName() + " where id = ?";
     }
 }

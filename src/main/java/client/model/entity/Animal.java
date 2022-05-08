@@ -1,9 +1,6 @@
 package client.model.entity;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import orm.annotation.Column;
 import orm.annotation.Entity;
 import orm.annotation.Id;
@@ -23,4 +20,9 @@ public class Animal {
     @NonNull String name;
     @Column(name="birth_date")
     LocalDate birthDate;
+
+    public Animal(String name, LocalDate localDate) {
+        this.name = name;
+        this.birthDate = localDate;
+    }
 }
