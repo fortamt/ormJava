@@ -85,6 +85,33 @@ public class OrmManager {
             return statement;
         }
 
+        public <T> PreparedStatement andParametersAndKey(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+            Metamodel metamodel = Metamodel.of(t.getClass());
+            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumns().get(columnIndex);
+                Class<?> fieldType = columnField.getType();
+                Field field = columnField.getField();
+                field.setAccessible(true);
+                Object value = field.get(t);
+                if (fieldType == int.class || fieldType == long.class) {
+                    statement.setInt(columnIndex + 1, (int) value);
+                } else if (fieldType == double.class || fieldType == float.class) {
+                    statement.setFloat(columnIndex + 1, (float) value);
+                } else if (fieldType == String.class) {
+                    statement.setString(columnIndex + 1, (String) value);
+                } else if (fieldType == LocalDate.class) {
+                    LocalDate localDate = (LocalDate) value;
+                    java.util.Date date =  Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    statement.setDate(columnIndex + 1, new Date(date.getTime()));
+                }
+            }
+            Field field = metamodel.getPrimaryKey().getField();
+            field.setAccessible(true);
+            Object value = field.get(t);
+            statement.setLong(metamodel.getColumns().size()+1, (Long)value);
+            return statement;
+        }
+
         public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
             if (primaryKey.getClass() == Long.class) {
                 statement.setLong(1, (Long)primaryKey);
@@ -106,9 +133,16 @@ public class OrmManager {
         }
     }
 
-    public void merge(Object objectToSave) {
+    public void merge(Object objectToSave) throws IllegalAccessException {
         // save the object state into the DB table at
         // the row that has PK = object id (field marked as @Id)
+        Metamodel metamodel = Metamodel.of(objectToSave.getClass());
+        String sql = metamodel.buildMergeRequest();
+        try (PreparedStatement statement = prepareStatementWith(sql).andParametersAndKey(objectToSave)){
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public <T> T load(Object id, Class<T> clss) {
