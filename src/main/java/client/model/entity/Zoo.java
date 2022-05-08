@@ -16,10 +16,10 @@ import orm.annotation.Table;
 @NoArgsConstructor
 @RequiredArgsConstructor
 public class Zoo {
-    @Id(name = "id")
+    @Id
     Long id;
 
-    @Column(name="name")
+    @Column(name="title")
     @NonNull
     String name;
 }
