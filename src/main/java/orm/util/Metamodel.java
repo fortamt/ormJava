@@ -113,9 +113,17 @@ public class Metamodel {
                 ")";
     }
 
+    public String buildRemoveSqlRequest() {
+        return "delete from " + clss.getSimpleName() + " where " + getPrimaryKey().getName() + " = ?";
+    }
+
+    public String buildSelectByIdSqlRequest() {
+        return "select * from " + clss.getSimpleName() + " where id = ?";
+
     public String buildSelectRequest() {
         // select id, name, age from Person where id = ?
         return "select * from " + this.tableName.name() +
                 " where " + getPrimaryKey().getName() + " = ?";
+
     }
 }

@@ -3,4 +3,5 @@
 /target/
 .xml
 .idea
+.properties
 .pb
