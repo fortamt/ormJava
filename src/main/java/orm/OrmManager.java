@@ -126,6 +126,18 @@ public class OrmManager {
 
     public void remove(Object entity) {
         // send delete to DB and set id to null
+        Metamodel metamodel = Metamodel.of(entity.getClass());
+        String sql = metamodel.buildRemoveSqlRequest();
+        try(PreparedStatement st = connection.prepareStatement(sql)) {
+            IdField idField = metamodel.getPrimaryKey();
+            Field field = idField.getField();
+            field.setAccessible(true);
+            Long idToRemove = (Long) field.get(entity);
+            field.set(entity, null);
+            st.setInt(1, Math.toIntExact(idToRemove));
+        } catch (SQLException | IllegalAccessException throwables) {
+            throwables.printStackTrace();
+        }
     }
 
     private void processSqlException(SQLException e) {

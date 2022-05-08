@@ -112,4 +112,9 @@ public class Metamodel {
                 ", primary key ("+id+")" +
                 ")";
     }
+
+    public String buildRemoveSqlRequest() {
+        String sql = "delete from " + clss.getSimpleName() + " where id = ?";
+        return sql;
+    }
 }
