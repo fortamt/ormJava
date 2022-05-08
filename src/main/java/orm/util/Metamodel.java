@@ -119,5 +119,11 @@ public class Metamodel {
 
     public String buildSelectByIdSqlRequest() {
         return "select * from " + clss.getSimpleName() + " where id = ?";
+
+    public String buildSelectRequest() {
+        // select id, name, age from Person where id = ?
+        return "select * from " + this.tableName.name() +
+                " where " + getPrimaryKey().getName() + " = ?";
+
     }
 }
