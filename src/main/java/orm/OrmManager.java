@@ -8,6 +8,7 @@ import orm.util.Metamodel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -80,6 +81,13 @@ public class OrmManager {
             }
             return statement;
         }
+
+        public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
+            if (primaryKey.getClass() == Long.class) {
+                statement.setLong(1, (Long)primaryKey);
+            }
+            return statement;
+        }
     }
 
     private <T> void setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
@@ -100,10 +108,56 @@ public class OrmManager {
         // the row that has PK = object id (field marked as @Id)
     }
 
-    public <T> T load(Object id, Class<T> entityClass) {
+    public <T> T load(Object id, Class<T> clss) {
         // from DB find the row with PK = id in the table
         // where the objects of given type reside
+        Metamodel metamodel = Metamodel.of(clss);
+        String sql = metamodel.buildSelectRequest();
+        try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            try {
+                return buildInstanceFrom(clss, resultSet);
+            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+                e.printStackTrace();
+            }
+        } catch (SQLException e){
+            processSqlException(e);
+        }
         return null;
+    }
+
+    private <T> T buildInstanceFrom(Class<T> clss, ResultSet resultSet) throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, SQLException {
+
+        Metamodel metamodel = Metamodel.of(clss);
+
+        T t = clss.getConstructor().newInstance();
+        Field primaryKeyField = metamodel.getPrimaryKey().getField();
+        String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
+        Class<?> primaryKeyType = primaryKeyField.getType();
+
+        resultSet.next();
+        if (primaryKeyType == Long.class) {
+            long primaryKey = resultSet.getInt(primaryKeyColumnName);
+            primaryKeyField.setAccessible(true);
+            primaryKeyField.set(t, primaryKey);
+        }
+
+        for (ColumnField columnField : metamodel.getColumns()) {
+            Field field = columnField.getField();
+            field.setAccessible(true);
+            Class<?> columnType = columnField.getType();
+            String columnName = columnField.getName();
+            if (columnType == int.class) {
+                int value = resultSet.getInt(columnName);
+                field.set(t, value);
+            } else if (columnType == String.class) {
+                String value = resultSet.getString(columnName);
+                field.set(t, value);
+            }
+        }
+
+        return t;
     }
 
     public void update(Object obj) {
