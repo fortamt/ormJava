@@ -6,6 +6,7 @@ import orm.OrmManager;
 
 
 import java.sql.SQLException;
+import java.util.Collection;
 
 public class MainClient {
     public static void main(String[] args) throws SQLException, IllegalAccessException {
@@ -38,5 +39,15 @@ public class MainClient {
 
         ormManager.remove(theZoo); // send delete to DB and set id to null
         System.out.println(theZoo.getId()); // null
+
+        var zoo1 = new Zoo("Alabama Zoo");
+        var zoo2 = new Zoo("Magic Zoo");
+        ormManager.persist(zoo1);
+        ormManager.persist(zoo2);
+        Collection<Zoo> zoo = ormManager.findAll(Zoo.class);
+        zoo.stream().forEach(System.out::println);
+
+        System.out.println(ormManager.count(Zoo.class));
     }
+
 }

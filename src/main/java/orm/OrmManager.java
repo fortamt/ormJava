@@ -1,6 +1,7 @@
 package orm;
 
 
+import client.model.entity.Zoo;
 import orm.util.ColumnField;
 import orm.util.IdField;
 import orm.util.Metamodel;
@@ -10,11 +11,12 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
+import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.Properties;
+import java.util.*;
 
 public class OrmManager {
 
@@ -78,7 +80,7 @@ public class OrmManager {
                     statement.setString(columnIndex + 1, (String) value);
                 } else if (fieldType == LocalDate.class) {
                     LocalDate localDate = (LocalDate) value;
-                    java.util.Date date =  Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
@@ -101,20 +103,20 @@ public class OrmManager {
                     statement.setString(columnIndex + 1, (String) value);
                 } else if (fieldType == LocalDate.class) {
                     LocalDate localDate = (LocalDate) value;
-                    java.util.Date date =  Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
             Field field = metamodel.getPrimaryKey().getField();
             field.setAccessible(true);
             Object value = field.get(t);
-            statement.setLong(metamodel.getColumns().size()+1, (Long)value);
+            statement.setLong(metamodel.getColumns().size() + 1, (Long) value);
             return statement;
         }
 
         public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
             if (primaryKey.getClass() == Long.class) {
-                statement.setLong(1, (Long)primaryKey);
+                statement.setLong(1, (Long) primaryKey);
             }
             return statement;
         }
@@ -138,7 +140,7 @@ public class OrmManager {
         // the row that has PK = object id (field marked as @Id)
         Metamodel metamodel = Metamodel.of(objectToSave.getClass());
         String sql = metamodel.buildMergeRequest();
-        try (PreparedStatement statement = prepareStatementWith(sql).andParametersAndKey(objectToSave)){
+        try (PreparedStatement statement = prepareStatementWith(sql).andParametersAndKey(objectToSave)) {
             statement.executeUpdate();
         } catch (SQLException e) {
             e.printStackTrace();
@@ -158,7 +160,7 @@ public class OrmManager {
             } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
                 e.printStackTrace();
             }
-        } catch (SQLException e){
+        } catch (SQLException e) {
             processSqlException(e);
         }
         return null;
@@ -172,9 +174,8 @@ public class OrmManager {
         Field primaryKeyField = metamodel.getPrimaryKey().getField();
         String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
         Class<?> primaryKeyType = primaryKeyField.getType();
-
         resultSet.next();
-        if (primaryKeyType == Long.class) {
+        if (primaryKeyType == Long.class && !resultSet.isAfterLast()) {
             long primaryKey = resultSet.getInt(primaryKeyColumnName);
             primaryKeyField.setAccessible(true);
             primaryKeyField.set(t, primaryKey);
@@ -185,7 +186,7 @@ public class OrmManager {
             field.setAccessible(true);
             Class<?> columnType = columnField.getType();
             String columnName = columnField.getName();
-            if (columnType == int.class) {
+            if (columnType == int.class && !resultSet.wasNull()) {
                 int value = resultSet.getInt(columnName);
                 field.set(t, value);
             } else if (columnType == String.class) {
@@ -204,7 +205,7 @@ public class OrmManager {
         // go to DB to table = obj.getClass at PK = obj id
         // and set the fields of the obj <= data from DB
         Metamodel metamodel = Metamodel.of(obj.getClass());
-        try(PreparedStatement ps = connection.prepareStatement(metamodel.buildSelectByIdSqlRequest())) {
+        try (PreparedStatement ps = connection.prepareStatement(metamodel.buildSelectByIdSqlRequest())) {
             IdField idField = metamodel.getPrimaryKey();
             Field fieldForId = idField.getField();
             fieldForId.setAccessible(true);
@@ -212,7 +213,7 @@ public class OrmManager {
             ps.setInt(1, Math.toIntExact(idToSelect));
             ResultSet rs = ps.executeQuery();
             rs.next();
-            for(var el: metamodel.getColumns()) {
+            for (var el : metamodel.getColumns()) {
                 ColumnField columnField = el;
                 Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
@@ -238,10 +239,10 @@ public class OrmManager {
 
     public void registerEntities(Class<?>... entityClasses) {
         // prepare MetaInfo, create the tables in the DB
-        for(Class clss : entityClasses){
+        for (Class clss : entityClasses) {
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildTableInDbRequest();
-            try (Statement statement = connection.createStatement()){
+            try (Statement statement = connection.createStatement()) {
                 statement.execute(sql);
             } catch (SQLException e) {
                 processSqlException(e);
@@ -249,10 +250,45 @@ public class OrmManager {
         }
     }
 
+    public <T> Optional<T> find(Class<T> entityClass, Object id) {
+        return Optional.empty();
+    }
+
+    public <T> Collection<T> findAll(Class<T> entityClass) {
+        Collection<T> result = new ArrayList<>();
+        Metamodel metamodel = Metamodel.of(entityClass);
+        try (PreparedStatement statement = connection.prepareStatement(metamodel.buildSelectAll())) {
+            ResultSet resultSet = statement.executeQuery();
+            boolean flag = true;
+            while (flag) {
+                result.add(buildInstanceFrom(entityClass, resultSet));
+                flag = resultSet.isLast() ? false : true;
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e.getMessage());
+        } catch (SQLException e) {
+            processSqlException(e);
+        }
+        return result;
+    }
+
+    public int count(Class<?> entityClass) {
+        int result = 0;
+        Metamodel metamodel = Metamodel.of(entityClass);
+        try (PreparedStatement statement = connection.prepareStatement(metamodel.buildCountRowsRequest())) {
+            ResultSet resultSet = statement.executeQuery();
+            resultSet.next();
+            result = resultSet.getInt(1);
+        } catch (SQLException e) {
+            processSqlException(e);
+        }
+        return result;
+    }
+
     public void remove(Object entity) {
         // send delete to DB and set id to null
         Metamodel metamodel = Metamodel.of(entity.getClass());
-        try(PreparedStatement st = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
+        try (PreparedStatement st = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
             IdField idField = metamodel.getPrimaryKey();
             Field field = idField.getField();
             field.setAccessible(true);

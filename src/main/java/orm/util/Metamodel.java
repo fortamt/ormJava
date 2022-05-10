@@ -128,6 +128,14 @@ public class Metamodel {
 
     }
 
+    public String buildCountRowsRequest() {
+        return "SELECT COUNT(*) FROM " + this.tableName.name();
+    }
+
+
+    public String buildSelectAll(){
+        return "SELECT * FROM " + this.tableName.name();
+    }
     public String buildMergeRequest() {
         String table = tableName.name();
         if(Objects.equals(table, "")){
@@ -149,4 +157,6 @@ public class Metamodel {
 
         return "UPDATE " + table + " SET " + columns + " WHERE " +id+ " = ?";
     }
+
+
 }
