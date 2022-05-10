@@ -18,7 +18,6 @@ import java.util.*;
 
 public class OrmManager {
 
-    Map<Class<?>, Map<Object, Object>> cache = new HashMap<>();
     Connection connection;
 
     public OrmManager(String schemaName) {
@@ -106,8 +105,9 @@ public class OrmManager {
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
-
-            Object value = getPrimaryKeyValue(t);
+            Field field = metamodel.getPrimaryKey().getField();
+            field.setAccessible(true);
+            Object value = field.get(t);
             statement.setLong(metamodel.getColumns().size() + 1, (Long) value);
             return statement;
         }
@@ -186,10 +186,10 @@ public class OrmManager {
         return t;
     }
 
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws SQLException, IllegalAccessException {
-        var key = resultSet.getObject(columnName, keyType);
-        field.setAccessible(true);
-        field.set(t, key);
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field primaryKeyField, String primaryKeyColumnName, Class<?> primaryKeyType) throws SQLException, IllegalAccessException {
+        var primaryKey = resultSet.getObject(primaryKeyColumnName, primaryKeyType);
+        primaryKeyField.setAccessible(true);
+        primaryKeyField.set(t, primaryKey);
     }
 
     public void update(Object obj) {
@@ -226,25 +226,6 @@ public class OrmManager {
         } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
-    }
-    public <T> boolean saveOrUpdate(T object) throws SQLException, IllegalAccessException {
-        Object value = getPrimaryKeyValue(object);
-        boolean result = false;
-        if (value == null) {
-            persist(object);
-            result = true;
-        } else{
-            merge(object);
-        }
-        return result;
-    }
-
-    private Object getPrimaryKeyValue(Object object) throws IllegalAccessException {
-        Metamodel metamodel = Metamodel.of(object.getClass());
-        Field field = metamodel.getPrimaryKey().getField();
-        field.setAccessible(true);
-        Object value = field.get(object);
-        return value;
     }
 
     public void registerEntities(Class<?>... entityClasses) {
@@ -310,9 +291,7 @@ public class OrmManager {
             Long idToRemove = (Long) field.get(entity);
             field.set(entity, null);
             st.setInt(1, Math.toIntExact(idToRemove));
-        } catch (SQLException throwables) {
-            processSqlException(throwables);
-        } catch (IllegalAccessException throwables) {
+        } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
     }
