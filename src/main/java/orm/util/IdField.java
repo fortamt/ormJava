@@ -6,15 +6,15 @@ import java.lang.reflect.Field;
 
 public class IdField {
     private Field field;
-    private Id primaryKey;
+    private String primaryKey;
 
     public IdField(Field field) {
         this.field = field;
-        this.primaryKey = this.field.getAnnotation(Id.class);
+        this.primaryKey = this.field.getAnnotation(Id.class).name().equals("") ? field.getName() : this.field.getAnnotation(Id.class).name();
     }
 
     public String getName() {
-        return primaryKey.name();
+        return primaryKey;
     }
 
     public Class<?> getType() {

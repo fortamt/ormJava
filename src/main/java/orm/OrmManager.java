@@ -143,7 +143,7 @@ public class OrmManager {
         try (PreparedStatement statement = prepareStatementWith(sql).andParametersAndKey(objectToSave)) {
             statement.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            processSqlException(e);
         }
     }
 
@@ -175,30 +175,24 @@ public class OrmManager {
         String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
         Class<?> primaryKeyType = primaryKeyField.getType();
         resultSet.next();
-        if (primaryKeyType == Long.class && !resultSet.isAfterLast()) {
-            long primaryKey = resultSet.getInt(primaryKeyColumnName);
-            primaryKeyField.setAccessible(true);
-            primaryKeyField.set(t, primaryKey);
-        }
+        setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType);
+
 
         for (ColumnField columnField : metamodel.getColumns()) {
             Field field = columnField.getField();
             field.setAccessible(true);
             Class<?> columnType = columnField.getType();
             String columnName = columnField.getName();
-            if (columnType == int.class && !resultSet.wasNull()) {
-                int value = resultSet.getInt(columnName);
-                field.set(t, value);
-            } else if (columnType == String.class) {
-                String value = resultSet.getString(columnName);
-                field.set(t, value);
-            } else if (columnType == Date.class) {
-                LocalDate value = resultSet.getDate(columnName).toLocalDate();
-                field.set(t, value);
-            }
+            setFieldValue(resultSet, t, field, columnName, columnType);
         }
 
         return t;
+    }
+
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field primaryKeyField, String primaryKeyColumnName, Class<?> primaryKeyType) throws SQLException, IllegalAccessException {
+        var primaryKey = resultSet.getObject(primaryKeyColumnName, primaryKeyType);
+        primaryKeyField.setAccessible(true);
+        primaryKeyField.set(t, primaryKey);
     }
 
     public void update(Object obj) {
