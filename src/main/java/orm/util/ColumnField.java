@@ -7,15 +7,15 @@ import java.lang.reflect.Field;
 public class ColumnField {
 
         private Field field;
-        private Column column;
+        private String column;
 
         public ColumnField(Field field) {
             this.field = field;
-            this.column = field.getAnnotation(Column.class);
+            this.column = field.getAnnotation(Column.class).name().equals("") ? field.getName() : field.getAnnotation(Column.class).name();
         }
 
         public String getName() {
-            return column.name();
+            return column;
         }
 
         public Class<?> getType() {

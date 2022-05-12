@@ -16,7 +16,7 @@ import java.util.stream.IntStream;
 public class Metamodel {
 
     private final Class<?> clss;
-    private final Table tableName;
+    private final String tableName;
 
     public static Metamodel of(Class<?> clss) {
         return new Metamodel(clss);
@@ -24,7 +24,7 @@ public class Metamodel {
 
     public Metamodel(Class<?> clss) {
         this.clss = clss;
-        this.tableName = this.clss.getAnnotation(Table.class);
+        this.tableName = this.clss.getAnnotation(Table.class).name().equals("") ? clss.getName() : this.clss.getAnnotation(Table.class).name();
     }
 
     public Class<?> getClassName() {
@@ -83,21 +83,12 @@ public class Metamodel {
     }
 
     public String buildTableInDbRequest() {
-        String table = tableName.name();
-        if(Objects.equals(table, "")){
-            table = this.clss.getName();
-        }
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
                 .map(el -> {
-                    String result = "";
-                    if(el.getName().equals("")){
-                        result+= el.getField().getName() + " ";
-                    } else {
-                        result+= el.getName()+ " ";
-                    }
+                    String result = el.getName() + " ";
                     if(el.getType() == String.class){
-                        result+= "varchar(50)";
+                        result+= "varchar(250)";
                     }
                     if(el.getType() == LocalDate.class){
                         result+= "date";
@@ -106,7 +97,7 @@ public class Metamodel {
                 })
                 .collect(Collectors.joining(", "));
 
-        return "create table if not exists " + table + " (" +
+        return "create table if not exists " + tableName + " (" +
                 id + " int not null auto_increment," +
                 columns +
                 ", primary key ("+id+")" +
@@ -123,39 +114,27 @@ public class Metamodel {
 
     public String buildSelectRequest() {
         // select id, name, age from Person where id = ?
-        return "select * from " + this.tableName.name() +
+        return "select * from " + this.tableName +
                 " where " + getPrimaryKey().getName() + " = ?";
 
     }
 
     public String buildCountRowsRequest() {
-        return "SELECT COUNT(*) FROM " + this.tableName.name();
+        return "SELECT COUNT(*) FROM " + this.tableName;
     }
 
 
     public String buildSelectAll(){
-        return "SELECT * FROM " + this.tableName.name();
+        return "SELECT * FROM " + this.tableName;
     }
+
     public String buildMergeRequest() {
-        String table = tableName.name();
-        if(Objects.equals(table, "")){
-            table = this.clss.getName();
-        }
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
-                .map(el -> {
-                    String result = "";
-                    if(el.getName().equals("")){
-                        result+= el.getField().getName() + " = ? ";
-                    } else {
-                        result+= el.getName()+ " = ? ";
-                    }
-
-                    return result;
-                })
+                .map(el -> el.getName() + "=?")
                 .collect(Collectors.joining(", "));
 
-        return "UPDATE " + table + " SET " + columns + " WHERE " +id+ " = ?";
+        return "UPDATE " + tableName + " SET " + columns + " WHERE " +id+ " = ?";
     }
 
 
