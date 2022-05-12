@@ -6,24 +6,24 @@ import java.lang.reflect.Field;
 
 public class ColumnField {
 
-        private Field field;
-        private Column column;
+    private Field field;
+    private String column;
 
-        public ColumnField(Field field) {
-            this.field = field;
-            this.column = field.getAnnotation(Column.class);
-        }
+    public ColumnField(Field field) {
+        this.field = field;
+        this.column = field.getAnnotation(Column.class).name().equals("") ? field.getName() : field.getAnnotation(Column.class).name();
+    }
 
-        public String getName() {
-            return column.name();
-        }
+    public String getName() {
+        return column;
+    }
 
-        public Class<?> getType() {
-            return field.getType();
-        }
+    public Class<?> getType() {
+        return field.getType();
+    }
 
-        public Field getField() {
-            return this.field;
-        }
+    public Field getField() {
+        return this.field;
+    }
 
 }
