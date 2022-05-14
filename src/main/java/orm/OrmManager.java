@@ -1,7 +1,7 @@
 package orm;
 
 
-import client.model.entity.Zoo;
+import orm.Exceptions.ObjectNotFoundException;
 import orm.util.ColumnField;
 import orm.util.IdField;
 import orm.util.Metamodel;
@@ -12,10 +12,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
 import java.sql.Date;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.*;
 
 public class OrmManager {
@@ -161,7 +159,7 @@ public class OrmManager {
                 e.printStackTrace();
             }
         } catch (SQLException e) {
-            processSqlException(e);
+            throw new ObjectNotFoundException(e.getMessage());
         }
         return null;
     }
@@ -176,7 +174,6 @@ public class OrmManager {
         Class<?> primaryKeyType = primaryKeyField.getType();
         resultSet.next();
         setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType);
-
 
         for (ColumnField columnField : metamodel.getColumns()) {
             Field field = columnField.getField();
@@ -245,7 +242,12 @@ public class OrmManager {
     }
 
     public <T> Optional<T> find(Class<T> entityClass, Object id) {
-        return Optional.empty();
+        try {
+            var result = load(id, entityClass);
+            return Optional.of(result);
+        } catch (ObjectNotFoundException e){
+            return Optional.empty();
+        }
     }
 
     public <T> Collection<T> findAll(Class<T> entityClass) {
