@@ -1,15 +1,12 @@
 package client.model.entity;
 
 import lombok.*;
-import orm.annotation.Column;
-import orm.annotation.Entity;
-import orm.annotation.Id;
-import orm.annotation.Table;
+import orm.annotation.*;
 
 import java.time.LocalDate;
 
 @Entity
-@Data
+@Getter @Setter
 @Table(name = "Animal")
 @NoArgsConstructor
 @RequiredArgsConstructor
@@ -21,4 +18,21 @@ public class Animal {
     @Column(name="birth_date")
     @NonNull LocalDate birthDate;
 
+    @ManyToOne(name="zoo_id")
+    Zoo zoo;
+
+    public void moveToZoo(Zoo newZoo){
+        zoo.removeAnimal(this);
+        newZoo.addAnimal(this);
+    }
+
+    @Override
+    public String toString() {
+        return "Animal{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", birthDate=" + birthDate +
+                ", zooName=" + zoo.getName() +
+                '}';
+    }
 }
