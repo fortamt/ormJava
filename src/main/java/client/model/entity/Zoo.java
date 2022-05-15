@@ -35,4 +35,21 @@ public class Zoo {
         animal.setZoo(null);
     }
 
+
+    @Override
+    public int hashCode() {
+        return 10;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Zoo other = (Zoo) obj;
+        return id != null && id.equals(other.getId());
+    }
 }

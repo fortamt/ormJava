@@ -16,7 +16,7 @@ public class Animal {
     @Column(name="name")
     @NonNull String name;
     @Column(name="birth_date")
-    @NonNull LocalDate birthDate;
+    LocalDate birthDate;
 
     @ManyToOne(name="zoo_id")
     Zoo zoo;
@@ -34,5 +34,22 @@ public class Animal {
                 ", birthDate=" + birthDate +
                 ", zooName=" + zoo.getName() +
                 '}';
+    }
+
+    @Override
+    public int hashCode() {
+        return 20;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Animal other = (Animal) obj;
+        return id != null && id.equals(other.getId());
     }
 }

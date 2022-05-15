@@ -187,10 +187,10 @@ public class OrmManager {
         return t;
     }
 
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field primaryKeyField, String primaryKeyColumnName, Class<?> primaryKeyType) throws SQLException, IllegalAccessException {
-        var primaryKey = resultSet.getObject(primaryKeyColumnName, primaryKeyType);
-        primaryKeyField.setAccessible(true);
-        primaryKeyField.set(t, primaryKey);
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws SQLException, IllegalAccessException {
+        var key = resultSet.getObject(columnName, keyType);
+        field.setAccessible(true);
+        field.set(t, key);
     }
 
     public void update(Object obj) {

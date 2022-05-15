@@ -48,6 +48,20 @@ public class MainClient {
         zoo.stream().forEach(System.out::println);
 
         System.out.println(ormManager.count(Zoo.class));
+
+        testManyToOne();
+    }
+
+    public static void testManyToOne() throws SQLException, IllegalAccessException {
+        var ormManager = new OrmManager("H2schema");
+
+        var zoo = new Zoo("Kharkiv Zoo");
+        var crocodile = new Animal("Gena");
+        var strange = new Animal("Cheburashka");
+        zoo.addAnimal(crocodile);
+        assert crocodile.getZoo() == zoo; // orm has set it
+        zoo.addAnimal(strange);
+        ormManager.persist(zoo); //change table zoo and table animal
     }
 
 }
