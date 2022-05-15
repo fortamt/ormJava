@@ -18,6 +18,7 @@ import java.util.*;
 
 public class OrmManager {
 
+    Map<Class<?>, Map<Object, Object>> cache = new HashMap<>();
     Connection connection;
 
     public OrmManager(String schemaName) {
@@ -291,7 +292,9 @@ public class OrmManager {
             Long idToRemove = (Long) field.get(entity);
             field.set(entity, null);
             st.setInt(1, Math.toIntExact(idToRemove));
-        } catch (SQLException | IllegalAccessException throwables) {
+        } catch (SQLException throwables) {
+            processSqlException(throwables);
+        } catch (IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
     }

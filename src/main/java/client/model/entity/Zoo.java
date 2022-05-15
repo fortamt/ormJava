@@ -1,20 +1,18 @@
 package client.model.entity;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import orm.annotation.Column;
-import orm.annotation.Entity;
-import orm.annotation.Id;
-import orm.annotation.Table;
+import lombok.*;
+import orm.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
-@Data
 @Entity
+@Getter @Setter
 @Table(name="Zoo")
 @NoArgsConstructor
 @RequiredArgsConstructor
+@ToString
 public class Zoo {
     @Id(name = "id")
     Long id;
@@ -22,4 +20,19 @@ public class Zoo {
     @Column(name="name")
     @NonNull
     String name;
+
+    @ToString.Exclude
+    @OneToMany(mappedBy="zoo")
+    List<Animal> animals = new ArrayList<>();
+
+    public void addAnimal(Animal animal){
+        this.getAnimals().add(animal);
+        animal.setZoo(this);
+    }
+
+    public void removeAnimal(Animal animal){
+        getAnimals().remove(animal);
+        animal.setZoo(null);
+    }
+
 }
