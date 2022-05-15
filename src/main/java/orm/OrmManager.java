@@ -106,9 +106,8 @@ public class OrmManager {
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
-            Field field = metamodel.getPrimaryKey().getField();
-            field.setAccessible(true);
-            Object value = field.get(t);
+
+            Object value = getPrimaryKeyValue(t);
             statement.setLong(metamodel.getColumns().size() + 1, (Long) value);
             return statement;
         }
@@ -227,6 +226,25 @@ public class OrmManager {
         } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
+    }
+    public <T> boolean saveOrUpdate(T object) throws SQLException, IllegalAccessException {
+        Object value = getPrimaryKeyValue(object);
+        boolean result = false;
+        if (value == null) {
+            persist(object);
+            result = true;
+        } else{
+            merge(object);
+        }
+        return result;
+    }
+
+    private Object getPrimaryKeyValue(Object object) throws IllegalAccessException {
+        Metamodel metamodel = Metamodel.of(object.getClass());
+        Field field = metamodel.getPrimaryKey().getField();
+        field.setAccessible(true);
+        Object value = field.get(object);
+        return value;
     }
 
     public void registerEntities(Class<?>... entityClasses) {
