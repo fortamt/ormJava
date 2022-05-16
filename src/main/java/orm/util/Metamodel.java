@@ -1,13 +1,12 @@
 package orm.util;
 
-import orm.annotation.Column;
-import orm.annotation.Id;
-import orm.annotation.Table;
+import orm.annotation.*;
 
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -16,6 +15,7 @@ public class Metamodel {
 
     private final Class<?> clss;
     private final String tableName;
+    private final Map<Class<?>, String> types = Map.of(Long.class, "int", Integer.class, "int", String.class, "varchar(250)", LocalDate.class, "date");
 
     public static Metamodel of(Class<?> clss) {
         return new Metamodel(clss);
@@ -34,13 +34,24 @@ public class Metamodel {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
-            Column column = field.getAnnotation(Column.class);
-            if (column != null) {
-                ColumnField columnField = new ColumnField(field);
-                columnFields.add(columnField);
-            }
+            ColumnField columnField = new ColumnField(field);
+            columnFields.add(columnField);
         }
-        return columnFields;
+        return columnFields.stream()
+                .filter(el -> el.getField().getAnnotation(OneToMany.class) == null)
+                .collect(Collectors.toList());
+    }
+
+    public List<ColumnField> getColumnsWithoutId() {
+        List<ColumnField> columnFields = new ArrayList<>();
+        Field[] fields = clss.getDeclaredFields();
+        for (Field field : fields) {
+            ColumnField columnField = new ColumnField(field);
+            columnFields.add(columnField);
+        }
+        return columnFields.stream()
+                .filter(el -> el.getField().getAnnotation(OneToMany.class) == null && el.getField().getAnnotation(Id.class) == null)
+                .collect(Collectors.toList());
     }
 
     public IdField getPrimaryKey() {
@@ -48,8 +59,7 @@ public class Metamodel {
         for (Field field : fields) {
             Id primaryKey = field.getAnnotation(Id.class);
             if (primaryKey != null) {
-                IdField primaryKeyField = new IdField(field);
-                return primaryKeyField;
+                return new IdField(field);
             }
         }
         throw new IllegalArgumentException("No primary key found in class " + clss.getSimpleName());
@@ -64,35 +74,36 @@ public class Metamodel {
     }
 
     private String buildQuestionMarksElement() {
-        int numberOfColumns = getColumns().size();
-        String questionMarksElement =
-                IntStream.range(0, numberOfColumns)
-                        .mapToObj(index -> "?")
-                        .collect(Collectors.joining(", "));
-        return questionMarksElement;
+        long count = getColumns()
+                .stream()
+                .filter(el -> el.getField().getAnnotation(Id.class) == null)
+                .count();
+        return IntStream.range(0, (int) count)
+                .mapToObj(index -> "?")
+                .collect(Collectors.joining(", "));
     }
 
     private String buildColumnNames() {
-        List<String> columnNames = getColumns()
+        return getColumns()
                 .stream()
+                .filter(el -> el.getField().getAnnotation(Id.class) == null)
                 .map(ColumnField::getName)
-                .collect(Collectors.toList());
-        String columnElement = String.join(", ", columnNames);
-        return columnElement;
+                .collect(Collectors.joining(", "));
     }
 
     public String buildTableInDbRequest() {
-        String id = getPrimaryKey().getName();
+        String id = getColumns().stream()
+                .filter(el -> el.getField().getAnnotation(Id.class) != null)
+                .map(ColumnField::getName)
+                .collect(Collectors.joining());
         String columns = getColumns().stream()
+                .filter(el -> el.getField().getAnnotation(Id.class) == null)
                 .map(el -> {
-                    String result = el.getName() + " ";
-                    if(el.getType() == String.class){
-                        result+= "varchar(250)";
+                    if(el.getField().getAnnotation(ManyToOne.class) !=null){
+                        return el.getName() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
+                    } else {
+                        return el.getName() + " " + types.get(el.getType());
                     }
-                    if(el.getType() == LocalDate.class){
-                        result+= "date";
-                    }
-                    return result;
                 })
                 .collect(Collectors.joining(", "));
 
@@ -101,6 +112,16 @@ public class Metamodel {
                 columns +
                 ", primary key ("+id+")" +
                 ")";
+    }
+
+    public String buildConstraintSqlRequest(){
+        return getColumns().stream()
+                .filter(el -> el.getField().getAnnotation(ManyToOne.class) != null)
+                .map(el ->
+                        "ALTER TABLE " + this.tableName +
+                                " ADD FOREIGN KEY (" + el.getName() + ") " +
+                                "REFERENCES " + Metamodel.of(el.getType()).tableName + "(" + Metamodel.of(el.getType()).getPrimaryKey().getName() + ")")
+                .collect(Collectors.joining(" "));
     }
 
     public String buildRemoveSqlRequest() {

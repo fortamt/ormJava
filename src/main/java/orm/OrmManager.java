@@ -65,8 +65,8 @@ public class OrmManager {
 
         public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getColumns().get(columnIndex);
+            for (int columnIndex = 0; columnIndex < metamodel.getColumnsWithoutId().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumnsWithoutId().get(columnIndex);
                 Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
                 field.setAccessible(true);
@@ -187,10 +187,10 @@ public class OrmManager {
         return t;
     }
 
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field primaryKeyField, String primaryKeyColumnName, Class<?> primaryKeyType) throws SQLException, IllegalAccessException {
-        var primaryKey = resultSet.getObject(primaryKeyColumnName, primaryKeyType);
-        primaryKeyField.setAccessible(true);
-        primaryKeyField.set(t, primaryKey);
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String key, Class<?> keyType) throws SQLException, IllegalAccessException {
+        var primaryKey = resultSet.getObject(key, keyType);
+        field.setAccessible(true);
+        field.set(t, primaryKey);
     }
 
     public void update(Object obj) {
@@ -234,6 +234,15 @@ public class OrmManager {
         for (Class clss : entityClasses) {
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildTableInDbRequest();
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(sql);
+            } catch (SQLException e) {
+                processSqlException(e);
+            }
+        }
+        for (Class clss : entityClasses){
+            Metamodel metamodel = Metamodel.of(clss);
+            String sql = metamodel.buildConstraintSqlRequest();
             try (Statement statement = connection.createStatement()) {
                 statement.execute(sql);
             } catch (SQLException e) {

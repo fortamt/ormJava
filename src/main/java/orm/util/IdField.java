@@ -10,7 +10,7 @@ public class IdField {
 
     public IdField(Field field) {
         this.field = field;
-        this.primaryKey = this.field.getAnnotation(Id.class).name().equals("") ? field.getName() : this.field.getAnnotation(Id.class).name();
+        this.primaryKey = field.getName();
     }
 
     public String getName() {
