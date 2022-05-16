@@ -42,14 +42,18 @@ public class MainClient {
 
         var zoo1 = new Zoo("Alabama Zoo");
         var zoo2 = new Zoo("Magic Zoo");
-        ormManager.persist(zoo1);
-        ormManager.persist(zoo2);
+
+        System.out.println("z1 " + ormManager.saveOrUpdate(zoo1)); //true
+        zoo1.setName("Kyiv zoo");
+        System.out.println(ormManager.saveOrUpdate(zoo1)); //false
+        System.out.println(ormManager.saveOrUpdate(zoo2)); // true
         Collection<Zoo> zoo = ormManager.findAll(Zoo.class);
         zoo.stream().forEach(System.out::println);
 
         System.out.println(ormManager.count(Zoo.class));
 
-        testManyToOne();
+
+//        testManyToOne();
     }
 
     public static void testManyToOne() throws SQLException, IllegalAccessException {
