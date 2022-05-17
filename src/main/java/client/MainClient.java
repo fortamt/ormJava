@@ -11,7 +11,7 @@ import java.util.Collection;
 public class MainClient {
     public static void main(String[] args) throws SQLException, IllegalAccessException {
         var ormManager = new OrmManager("H2schema");
-//        var ormManagerPg = new OrmManager("PGschema");
+//        var ormManager = new OrmManager("PGschema");
 
         ormManager.registerEntities(Zoo.class, Animal.class);
 
