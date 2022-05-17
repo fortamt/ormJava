@@ -26,6 +26,10 @@ public class Metamodel {
         this.tableName = this.clss.getAnnotation(Table.class).name().equals("") ? clss.getName() : this.clss.getAnnotation(Table.class).name();
     }
 
+    public String getClassName() {
+        return tableName;
+    }
+
     public List<ColumnField> getColumns() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
