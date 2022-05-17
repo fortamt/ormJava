@@ -284,18 +284,23 @@ public class OrmManager {
 
     public <T> Collection<T> findAll(Class<T> entityClass) {
         Collection<T> result = new ArrayList<>();
+        List<Object> keys = new ArrayList<>();
         Metamodel metamodel = Metamodel.of(entityClass);
-        try (PreparedStatement statement = connection.prepareStatement(metamodel.buildSelectAll())) {
+        try(PreparedStatement statement = connection.prepareStatement("select " + metamodel.getPrimaryKey().getName() + " from " + metamodel.getClassName())){
             ResultSet resultSet = statement.executeQuery();
-            boolean flag = true;
-            while (flag) {
-                result.add(buildInstanceFrom(entityClass, resultSet));
-                flag = resultSet.isLast() ? false : true;
+            while (resultSet.next()){
+                var pKey = resultSet.getObject(metamodel.getPrimaryKey().getName(), metamodel.getPrimaryKey().getType());
+                keys.add(pKey);
             }
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e.getMessage());
         } catch (SQLException e) {
             processSqlException(e);
+        }
+        for (Object key : keys){
+            if (isPresentInCache(entityClass, key)){
+                result.add((T) findInCache(entityClass, key).get());
+            } else {
+                result.add(find(entityClass, key).get());
+            }
         }
         return result;
     }
@@ -336,6 +341,10 @@ public class OrmManager {
         } catch (NullPointerException e) {
             return Optional.empty();
         }
+    }
+
+    private boolean isPresentInCache(Class<?> clss, Object id){
+        return clss.isInstance(clss.isInstance(id));
     }
 
     private <T> boolean putInCache(T t){
