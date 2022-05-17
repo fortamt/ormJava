@@ -11,7 +11,7 @@ public class ColumnField {
 
     public ColumnField(Field field) {
         this.field = field;
-        this.column = field.getAnnotation(Column.class).name().equals("") ? field.getName() : field.getAnnotation(Column.class).name();
+        this.column = field.getName();
     }
 
     public String getName() {
