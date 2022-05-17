@@ -69,8 +69,8 @@ public class OrmManager {
 
         public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException {
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getColumnsWithForeignKeysWithoutId().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getColumnsWithForeignKeysWithoutId().get(columnIndex);
+            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumns().get(columnIndex);
                 Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
                 field.setAccessible(true);
@@ -354,6 +354,34 @@ public class OrmManager {
         } catch (IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
+    }
+
+    private <T> Optional<T> findInCache(Class<?> clss, Object id){
+        try {
+            return Optional.ofNullable((T) cache.get(clss).get(id));
+        } catch (NullPointerException e) {
+            return Optional.empty();
+        }
+    }
+
+    private boolean isPresentInCache(Class<?> clss, Object id){
+        return clss.isInstance(clss.isInstance(id));
+    }
+
+    private <T> boolean putInCache(T t){
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        IdField idField = metamodel.getPrimaryKey();
+        Field field = idField.getField();
+        field.setAccessible(true);
+        Object key;
+        try {
+            key = field.get(t);
+        } catch (IllegalAccessException e) {
+            processIAException(e);
+            return false;
+        }
+        cache.put(t.getClass(), Map.of(key, t));
+        return  true;
     }
 
     private <T> Optional<T> findInCache(Class<?> clss, Object id){
