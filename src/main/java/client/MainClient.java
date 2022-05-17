@@ -3,7 +3,6 @@ package client;
 import client.model.entity.Animal;
 import client.model.entity.Zoo;
 import orm.OrmManager;
-import orm.util.Metamodel;
 
 
 import java.sql.SQLException;
@@ -12,19 +11,53 @@ import java.util.Collection;
 
 public class MainClient {
     public static void main(String[] args) throws SQLException, IllegalAccessException, NoSuchFieldException {
-        OrmManager orm = new OrmManager("H2schema");
-        Zoo zoo = new Zoo("NewYork");
-        Zoo zoo1 = new Zoo("California");
-        Animal anim1 = new Animal("Bober", LocalDate.now());
-        Animal anim2 = new Animal("Bear", LocalDate.of(2001, 1, 1));
-        Animal anim3 = new Animal("Elephant", LocalDate.of(2002, 11, 23));
-        Animal anim4 = new Animal("Lion", LocalDate.of(2006, 10, 2));
-        zoo.addAnimal(anim1);
-        zoo.addAnimal(anim2);
-        zoo.addAnimal(anim3);
-        zoo1.addAnimal(anim4);
-        orm.registerEntities(Zoo.class, Animal.class);
-        orm.persist(zoo);
-        orm.persist(zoo1);
+        var ormManager = new OrmManager("H2schema");
+//        var ormManager = new OrmManager("PGschema");
+
+        ormManager.registerEntities(Zoo.class, Animal.class);
+
+        var zooOfNewYork = new Zoo("New York Zoo");
+        System.out.println(zooOfNewYork.getId()); // null
+
+        ormManager.persist(zooOfNewYork); // there is a row in DB table
+        System.out.println(ormManager.findAll(Zoo.class));
+        System.out.println(zooOfNewYork.getId()); // 1 (not null)
+
+        long id = zooOfNewYork.getId();
+        Zoo theZoo = ormManager.load(id, Zoo.class);
+        System.out.println(theZoo);
+
+        zooOfNewYork.setName("Zoo of New York");
+        ormManager.merge(zooOfNewYork);
+
+        System.out.println(theZoo.getName().equals(
+                zooOfNewYork.getName()
+        )); // true if cache is used false if new object is loaded
+
+        ormManager.update(theZoo);
+        System.out.println(theZoo.getName().equals(
+                zooOfNewYork.getName()
+        )); // true
+
+        ormManager.remove(theZoo); // send delete to DB and set id to null
+        System.out.println(theZoo.getId()); // null
+
+        var zoo1 = new Zoo("Alabama Zoo");
+        var zoo2 = new Zoo("Magic Zoo");
+
+
+//        testManyToOne();
     }
+
+    public static void testManyToOne() throws SQLException, IllegalAccessException, NoSuchFieldException {
+        var ormManager = new OrmManager("H2schema");
+        var zoo = new Zoo("Kharkiv Zoo");
+        var crocodile = new Animal("Gena", LocalDate.now());
+        var strange = new Animal("Cheburashka", LocalDate.now());
+        zoo.addAnimal(crocodile);
+        assert crocodile.getZoo() == zoo; // orm has set it
+        zoo.addAnimal(strange);
+        ormManager.persist(zoo); //change table zoo and table animal
+    }
+
 }
