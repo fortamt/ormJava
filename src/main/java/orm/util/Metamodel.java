@@ -17,7 +17,6 @@ public class Metamodel {
     private final String tableName;
     private final Map<Class<?>, String> types = Map.of(Long.class, "int", Integer.class, "int", String.class, "varchar(250)", LocalDate.class, "date");
 
-
     public static Metamodel of(Class<?> clss) {
         return new Metamodel(clss);
     }
@@ -35,22 +34,9 @@ public class Metamodel {
             columnFields.add(columnField);
         }
         return columnFields.stream()
-                .filter(el -> el.getField().getAnnotation(OneToMany.class) == null)
-                .collect(Collectors.toList());
+                .filter(el -> !el.getField().isAnnotationPresent(OneToMany.class) && !el.getField().isAnnotationPresent(Id.class))
+                .toList();
     }
-
-    public List<ColumnField> getColumnsWithForeignKeysWithoutId() {
-        List<ColumnField> columnFields = new ArrayList<>();
-        Field[] fields = clss.getDeclaredFields();
-        for (Field field : fields) {
-            ColumnField columnField = new ColumnField(field);
-            columnFields.add(columnField);
-        }
-        return columnFields.stream()
-                .filter(el -> !el.getField().isAnnotationPresent(Id.class))
-                .collect(Collectors.toList());
-    }
-
 
     public IdField getPrimaryKey() {
         Field[] fields = clss.getDeclaredFields();
@@ -84,32 +70,15 @@ public class Metamodel {
     private String buildColumnNames() {
         return getColumns()
                 .stream()
-                .filter(el -> el.getField().getAnnotation(Id.class) == null)
                 .map(ColumnField::getName)
                 .collect(Collectors.joining(", "));
     }
 
-    public boolean isManyToOnePresent() {
-        return getColumnsWithForeignKeysWithoutId().stream().anyMatch(x -> x.getField().isAnnotationPresent(ManyToOne.class));
-    }
-
-    public boolean isOneToManyPresent() {
-        return getColumnsWithForeignKeysWithoutId().stream().anyMatch(x -> x.getField().isAnnotationPresent(OneToMany.class));
-    }
-
-    public List<ColumnField> getOneToManyColumns() {
-        return getColumnsWithForeignKeysWithoutId().stream().filter(x -> x.getField().isAnnotationPresent(OneToMany.class)).toList();
-    }
-
     public String buildTableInDbRequest() {
-        String id = getColumns().stream()
-                .filter(el -> el.getField().getAnnotation(Id.class) != null)
-                .map(ColumnField::getName)
-                .collect(Collectors.joining());
+        String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
-                .filter(el -> el.getField().getAnnotation(Id.class) == null)
                 .map(el -> {
-                    if(el.getField().getAnnotation(ManyToOne.class) !=null){
+                    if(el.getField().isAnnotationPresent(ManyToOne.class)){
                         return el.getName() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
                     } else {
                         return el.getName() + " " + types.get(el.getType());
@@ -124,9 +93,9 @@ public class Metamodel {
                 ")";
     }
 
-    public String buildConstraintSqlRequest() {
+    public String buildConstraintSqlRequest(){
         return getColumns().stream()
-                .filter(el -> el.getField().getAnnotation(ManyToOne.class) != null)
+                .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .map(el ->
                         "ALTER TABLE " + this.tableName +
                                 " ADD FOREIGN KEY (" + el.getName() + ") " +
