@@ -331,35 +331,6 @@ public class OrmManager {
         }
     }
 
-    public void printDataBaseAnimal() {
-        Metamodel metamodel = Metamodel.of(Animal.class);
-        String sql = metamodel.buildSelectAll();
-        try(Statement st = connection.createStatement()) {
-            ResultSet resultSet = st.executeQuery(sql);
-            while(resultSet.next()) {
-                System.out.println("id = " + resultSet.getInt("id")
-                        + " name = " + resultSet.getString("name")
-                        + " date = " + resultSet.getDate("birthdate")
-                        + " zoo_id = " + resultSet.getInt("zoo"));
-            }
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
-        }
-    }
-
-    public void printDataBaseZoo() {
-        Metamodel metamodel = Metamodel.of(Zoo.class);
-        String sql = metamodel.buildSelectAll();
-        try(Statement st = connection.createStatement()) {
-            ResultSet resultSet = st.executeQuery(sql);
-            while(resultSet.next()) {
-                System.out.println("id = " + resultSet.getInt("id")
-                        + " name = " + resultSet.getString("name"));
-            }
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
-        }
-    }
 
     private void processSqlException(SQLException e) {
         e.printStackTrace();

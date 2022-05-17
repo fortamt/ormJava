@@ -16,15 +16,11 @@ public class Animal {
     @Column(name="name")
     @NonNull String name;
     @Column(name="birth_date")
-    LocalDate birthDate;
+    @NonNull LocalDate birthDate;
 
     @ManyToOne(name="zoo_id")
     Zoo zoo;
 
-    public Animal(@NonNull String name, LocalDate birthDate) {
-        this.name = name;
-        this.birthDate = birthDate;
-    }
 
     public void moveToZoo(Zoo newZoo){
         zoo.removeAnimal(this);

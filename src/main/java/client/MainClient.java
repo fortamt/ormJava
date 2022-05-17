@@ -26,9 +26,5 @@ public class MainClient {
         orm.registerEntities(Zoo.class, Animal.class);
         orm.persist(zoo);
         orm.persist(zoo1);
-        System.out.println("Animal: ");
-        orm.printDataBaseAnimal();
-        System.out.println("Zoo: ");
-        orm.printDataBaseZoo();
     }
 }
