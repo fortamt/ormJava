@@ -65,8 +65,8 @@ public class OrmManager {
 
         public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getColumnsWithoutId().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getColumnsWithoutId().get(columnIndex);
+            for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumns().get(columnIndex);
                 Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
                 field.setAccessible(true);
@@ -148,20 +148,24 @@ public class OrmManager {
     public <T> T load(Object id, Class<T> clss) {
         // from DB find the row with PK = id in the table
         // where the objects of given type reside
-        Metamodel metamodel = Metamodel.of(clss);
-        String sql = metamodel.buildSelectRequest();
-        try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id);
-             ResultSet resultSet = statement.executeQuery()) {
-
-            try {
-                return buildInstanceFrom(clss, resultSet);
-            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+        var result = findInCache(clss ,id);
+        if(result.isPresent()){
+            return (T) result.get();
+        } else {
+            Metamodel metamodel = Metamodel.of(clss);
+            String sql = metamodel.buildSelectRequest();
+            try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id);
+                 ResultSet resultSet = statement.executeQuery()) {
+                T t = buildInstanceFrom(clss, resultSet);
+                putInCache(t);
+                return t;
+            } catch (SQLException e) {
+                throw new ObjectNotFoundException(e.getMessage());
+            } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
                 e.printStackTrace();
             }
-        } catch (SQLException e) {
-            throw new ObjectNotFoundException(e.getMessage());
+            throw new ObjectNotFoundException("Cannot load object");
         }
-        return null;
     }
 
     private <T> T buildInstanceFrom(Class<T> clss, ResultSet resultSet) throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, SQLException {
@@ -249,7 +253,7 @@ public class OrmManager {
 
     public void registerEntities(Class<?>... entityClasses) {
         // prepare MetaInfo, create the tables in the DB
-        for (Class clss : entityClasses) {
+        for (Class<?> clss : entityClasses) {
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildTableInDbRequest();
             try (Statement statement = connection.createStatement()) {
@@ -258,7 +262,7 @@ public class OrmManager {
                 processSqlException(e);
             }
         }
-        for (Class clss : entityClasses){
+        for (Class<?> clss : entityClasses){
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildConstraintSqlRequest();
             try (Statement statement = connection.createStatement()) {
@@ -326,11 +330,39 @@ public class OrmManager {
         }
     }
 
+    private <T> Optional<T> findInCache(Class<?> clss, Object id){
+        try {
+            return Optional.ofNullable((T) cache.get(clss).get(id));
+        } catch (NullPointerException e) {
+            return Optional.empty();
+        }
+    }
+
+    private <T> boolean putInCache(T t){
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        IdField idField = metamodel.getPrimaryKey();
+        Field field = idField.getField();
+        field.setAccessible(true);
+        Object key;
+        try {
+            key = field.get(t);
+        } catch (IllegalAccessException e) {
+            processIAException(e);
+            return false;
+        }
+        cache.put(t.getClass(), Map.of(key, t));
+        return  true;
+    }
+
     private void processSqlException(SQLException e) {
         e.printStackTrace();
     }
 
     private void processIoException(IOException e) {
+        e.printStackTrace();
+    }
+
+    private void processIAException(IllegalAccessException e) {
         e.printStackTrace();
     }
 
