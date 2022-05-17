@@ -21,6 +21,11 @@ public class Animal {
     @ManyToOne(name="zoo_id")
     Zoo zoo;
 
+    public Animal(@NonNull String name, LocalDate birthDate) {
+        this.name = name;
+        this.birthDate = birthDate;
+    }
+
     public void moveToZoo(Zoo newZoo){
         zoo.removeAnimal(this);
         newZoo.addAnimal(this);

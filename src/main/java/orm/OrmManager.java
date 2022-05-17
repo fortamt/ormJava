@@ -1,7 +1,11 @@
 package orm;
 
 
+import client.model.entity.Animal;
+import client.model.entity.Zoo;
 import orm.Exceptions.ObjectNotFoundException;
+import orm.annotation.ManyToOne;
+import orm.annotation.OneToMany;
 import orm.util.ColumnField;
 import orm.util.IdField;
 import orm.util.Metamodel;
@@ -40,12 +44,15 @@ public class OrmManager {
     }
 
 
-    public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException {
+    public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException, NoSuchFieldException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         String sql = metamodel.buildInsertSqlRequest(); // building sql request like "insert into Zoo (name) values (?)"
         try (PreparedStatement statement = prepareStatementWith(sql).andParameters(t)) {
             statement.executeUpdate();
             setIdToObjectAfterPersisting(t, statement);
+            if(metamodel.isOneToManyPresent()) {
+                setOneToManyReferences(t, statement);
+            }
         }
     }
 
@@ -62,10 +69,10 @@ public class OrmManager {
             this.statement = statement;
         }
 
-        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException {
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getColumnsWithoutId().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getColumnsWithoutId().get(columnIndex);
+            for (int columnIndex = 0; columnIndex < metamodel.getColumnsWithForeignKeysWithoutId().size(); columnIndex++) {
+                ColumnField columnField = metamodel.getColumnsWithForeignKeysWithoutId().get(columnIndex);
                 Class<?> fieldType = columnField.getType();
                 Field field = columnField.getField();
                 field.setAccessible(true);
@@ -80,6 +87,12 @@ public class OrmManager {
                     LocalDate localDate = (LocalDate) value;
                     java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
+                }
+                if(field.isAnnotationPresent(ManyToOne.class)) {
+                   Field fieldForForeignKey = value.getClass().getDeclaredField("id");
+                   fieldForForeignKey.setAccessible(true);
+                   int id = Math.toIntExact((Long) fieldForForeignKey.get(value));
+                    statement.setInt(columnIndex + 1, id);
                 }
             }
             return statement;
@@ -120,16 +133,30 @@ public class OrmManager {
         }
     }
 
-    private <T> void setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
+    private <T> int setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         ResultSet resultSet = ps.getGeneratedKeys();
+        int id;
         if (resultSet.next()) {
             IdField idField = metamodel.getPrimaryKey();
             Field field1 = idField.getField();
             field1.setAccessible(true);
-            field1.set(t, (long) resultSet.getInt(1));
+            id = resultSet.getInt(1);
+            field1.set(t, (long) id);
         } else {
             throw new SQLException();
+        }
+        return id;
+    }
+
+    private <T> void setOneToManyReferences(T t, PreparedStatement ps) throws IllegalAccessException, SQLException, NoSuchFieldException {
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        for(var el: metamodel.getOneToManyColumns()) {
+            el.getField().setAccessible(true);
+            List<?> list = (List<?>) el.getField().get(t);
+            for(var obj: list) {
+                persist(obj);
+            }
         }
     }
 
@@ -152,7 +179,6 @@ public class OrmManager {
         String sql = metamodel.buildSelectRequest();
         try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id);
              ResultSet resultSet = statement.executeQuery()) {
-
             try {
                 return buildInstanceFrom(clss, resultSet);
             } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
@@ -301,6 +327,36 @@ public class OrmManager {
             field.set(entity, null);
             st.setInt(1, Math.toIntExact(idToRemove));
         } catch (SQLException | IllegalAccessException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    public void printDataBaseAnimal() {
+        Metamodel metamodel = Metamodel.of(Animal.class);
+        String sql = metamodel.buildSelectAll();
+        try(Statement st = connection.createStatement()) {
+            ResultSet resultSet = st.executeQuery(sql);
+            while(resultSet.next()) {
+                System.out.println("id = " + resultSet.getInt("id")
+                        + " name = " + resultSet.getString("name")
+                        + " date = " + resultSet.getDate("birthdate")
+                        + " zoo_id = " + resultSet.getInt("zoo"));
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    public void printDataBaseZoo() {
+        Metamodel metamodel = Metamodel.of(Zoo.class);
+        String sql = metamodel.buildSelectAll();
+        try(Statement st = connection.createStatement()) {
+            ResultSet resultSet = st.executeQuery(sql);
+            while(resultSet.next()) {
+                System.out.println("id = " + resultSet.getInt("id")
+                        + " name = " + resultSet.getString("name"));
+            }
+        } catch (SQLException throwables) {
             throwables.printStackTrace();
         }
     }
