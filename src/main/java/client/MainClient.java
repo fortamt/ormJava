@@ -9,7 +9,7 @@ import java.sql.SQLException;
 import java.util.Collection;
 
 public class MainClient {
-    public static void main(String[] args) throws SQLException, IllegalAccessException {
+    public static void main(String[] args) throws SQLException, IllegalAccessException, NoSuchFieldException {
         var ormManager = new OrmManager("H2schema");
 //        var ormManager = new OrmManager("PGschema");
 
@@ -57,7 +57,7 @@ public class MainClient {
 //        testManyToOne();
     }
 
-    public static void testManyToOne() throws SQLException, IllegalAccessException {
+    public static void testManyToOne() throws SQLException, IllegalAccessException, NoSuchFieldException {
         var ormManager = new OrmManager("H2schema");
 
         var zoo = new Zoo("Kharkiv Zoo");

@@ -2,6 +2,7 @@ package orm;
 
 
 import orm.Exceptions.ObjectNotFoundException;
+import orm.annotation.ManyToOne;
 import orm.util.ColumnField;
 import orm.util.IdField;
 import orm.util.Metamodel;
@@ -18,6 +19,7 @@ import java.util.*;
 
 public class OrmManager {
 
+    Map<Class<?>, Map<Object, Object>> cache = new HashMap<>();
     Connection connection;
 
     public OrmManager(String schemaName) {
@@ -40,12 +42,15 @@ public class OrmManager {
     }
 
 
-    public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException {
+    public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException, NoSuchFieldException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         String sql = metamodel.buildInsertSqlRequest(); // building sql request like "insert into Zoo (name) values (?)"
         try (PreparedStatement statement = prepareStatementWith(sql).andParameters(t)) {
             statement.executeUpdate();
             setIdToObjectAfterPersisting(t, statement);
+            if(metamodel.isOneToManyPresent()) {
+                setOneToManyReferences(t, statement);
+            }
         }
     }
 
@@ -62,7 +67,7 @@ public class OrmManager {
             this.statement = statement;
         }
 
-        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException {
             Metamodel metamodel = Metamodel.of(t.getClass());
             for (int columnIndex = 0; columnIndex < metamodel.getColumns().size(); columnIndex++) {
                 ColumnField columnField = metamodel.getColumns().get(columnIndex);
@@ -80,6 +85,12 @@ public class OrmManager {
                     LocalDate localDate = (LocalDate) value;
                     java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
+                }
+                if(field.isAnnotationPresent(ManyToOne.class)) {
+                    Field fieldForForeignKey = value.getClass().getDeclaredField("id");
+                    fieldForForeignKey.setAccessible(true);
+                    int id = Math.toIntExact((Long) fieldForForeignKey.get(value));
+                    statement.setInt(columnIndex + 1, id);
                 }
             }
             return statement;
@@ -105,9 +116,8 @@ public class OrmManager {
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
             }
-            Field field = metamodel.getPrimaryKey().getField();
-            field.setAccessible(true);
-            Object value = field.get(t);
+
+            Object value = getPrimaryKeyValue(t);
             statement.setLong(metamodel.getColumns().size() + 1, (Long) value);
             return statement;
         }
@@ -130,6 +140,17 @@ public class OrmManager {
             field1.set(t, (long) resultSet.getInt(1));
         } else {
             throw new SQLException();
+        }
+    }
+
+    private <T> void setOneToManyReferences(T t, PreparedStatement ps) throws IllegalAccessException, SQLException, NoSuchFieldException {
+        Metamodel metamodel = Metamodel.of(t.getClass());
+        for(var el: metamodel.getOneToManyColumns()) {
+            el.getField().setAccessible(true);
+            List<?> list = (List<?>) el.getField().get(t);
+            for(var obj: list) {
+                persist(obj);
+            }
         }
     }
 
@@ -190,10 +211,10 @@ public class OrmManager {
         return t;
     }
 
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field primaryKeyField, String primaryKeyColumnName, Class<?> primaryKeyType) throws SQLException, IllegalAccessException {
-        var primaryKey = resultSet.getObject(primaryKeyColumnName, primaryKeyType);
-        primaryKeyField.setAccessible(true);
-        primaryKeyField.set(t, primaryKey);
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws SQLException, IllegalAccessException {
+        var key = resultSet.getObject(columnName, keyType);
+        field.setAccessible(true);
+        field.set(t, key);
     }
 
     public void update(Object obj) {
@@ -230,6 +251,25 @@ public class OrmManager {
         } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
+    }
+    public <T> boolean saveOrUpdate(T object) throws SQLException, IllegalAccessException, NoSuchFieldException {
+        Object value = getPrimaryKeyValue(object);
+        boolean result = false;
+        if (value == null) {
+            persist(object);
+            result = true;
+        } else{
+            merge(object);
+        }
+        return result;
+    }
+
+    private Object getPrimaryKeyValue(Object object) throws IllegalAccessException {
+        Metamodel metamodel = Metamodel.of(object.getClass());
+        Field field = metamodel.getPrimaryKey().getField();
+        field.setAccessible(true);
+        Object value = field.get(object);
+        return value;
     }
 
     public void registerEntities(Class<?>... entityClasses) {
@@ -309,7 +349,9 @@ public class OrmManager {
             Long idToRemove = (Long) field.get(entity);
             field.set(entity, null);
             st.setInt(1, Math.toIntExact(idToRemove));
-        } catch (SQLException | IllegalAccessException throwables) {
+        } catch (SQLException throwables) {
+            processSqlException(throwables);
+        } catch (IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
     }

@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-
 public class Metamodel {
 
     private final Class<?> clss;
@@ -40,6 +39,16 @@ public class Metamodel {
         return columnFields.stream()
                 .filter(el -> !el.getField().isAnnotationPresent(OneToMany.class) && !el.getField().isAnnotationPresent(Id.class))
                 .toList();
+    }
+
+    public List<ColumnField> getColumnsWithForeignKeysWithoutId() {
+        List<ColumnField> columnFields = new ArrayList<>();
+        Field[] fields = clss.getDeclaredFields();
+        for (Field field : fields) {
+            ColumnField columnField = new ColumnField(field);
+            columnFields.add(columnField);
+        }
+        return columnFields.stream().filter(el -> !el.getField().isAnnotationPresent(Id.class)).toList();
     }
 
     public IdField getPrimaryKey() {
@@ -141,4 +150,15 @@ public class Metamodel {
     }
 
 
+    public List<ColumnField> getOneToManyColumns() {
+        return getColumnsWithForeignKeysWithoutId()
+                .stream().filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
+                .toList();
+    }
+
+    public boolean isOneToManyPresent() {
+        return getColumnsWithForeignKeysWithoutId()
+                .stream().anyMatch(el -> el.getField().isAnnotationPresent(OneToMany.class));
+    }
 }
+
