@@ -19,6 +19,7 @@ public class MainClient {
         System.out.println(zooOfNewYork.getId()); // null
 
         ormManager.persist(zooOfNewYork); // there is a row in DB table
+        System.out.println(ormManager.findAll(Zoo.class));
         System.out.println(zooOfNewYork.getId()); // 1 (not null)
 
         long id = zooOfNewYork.getId();
