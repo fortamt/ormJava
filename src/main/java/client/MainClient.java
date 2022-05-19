@@ -6,6 +6,7 @@ import orm.OrmManager;
 
 
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.Collection;
 
 public class MainClient {
@@ -14,6 +15,10 @@ public class MainClient {
 //        var ormManager = new OrmManager("PGschema");
 
         ormManager.registerEntities(Zoo.class, Animal.class);
+
+
+
+
 
         var zooOfNewYork = new Zoo("New York Zoo");
         System.out.println(zooOfNewYork.getId()); // null
@@ -57,16 +62,16 @@ public class MainClient {
 //        testManyToOne();
     }
 
-    public static void testManyToOne() throws SQLException, IllegalAccessException, NoSuchFieldException {
-        var ormManager = new OrmManager("H2schema");
-
-        var zoo = new Zoo("Kharkiv Zoo");
-        var crocodile = new Animal("Gena");
-        var strange = new Animal("Cheburashka");
-        zoo.addAnimal(crocodile);
-        assert crocodile.getZoo() == zoo; // orm has set it
-        zoo.addAnimal(strange);
-        ormManager.persist(zoo); //change table zoo and table animal
-    }
+//    public static void testManyToOne() throws SQLException, IllegalAccessException, NoSuchFieldException {
+//        var ormManager = new OrmManager("H2schema");
+//
+//        var zoo = new Zoo("Kharkiv Zoo");
+//        var crocodile = new Animal("Gena");
+//        var strange = new Animal("Cheburashka");
+//        zoo.addAnimal(crocodile);
+//        assert crocodile.getZoo() == zoo; // orm has set it
+//        zoo.addAnimal(strange);
+//        ormManager.persist(zoo); //change table zoo and table animal
+//    }
 
 }

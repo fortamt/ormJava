@@ -41,15 +41,18 @@ public class Metamodel {
                 .toList();
     }
 
-    public List<ColumnField> getColumnsWithForeignKeysWithoutId() {
+    private List<ColumnField> getReferencesColumns() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
             ColumnField columnField = new ColumnField(field);
             columnFields.add(columnField);
         }
-        return columnFields.stream().filter(el -> !el.getField().isAnnotationPresent(Id.class)).toList();
+        return columnFields.stream()
+                .filter(el -> el.getField().isAnnotationPresent(OneToMany.class) || el.getField().isAnnotationPresent(ManyToOne.class))
+                .toList();
     }
+
 
     public IdField getPrimaryKey() {
         Field[] fields = clss.getDeclaredFields();
@@ -135,11 +138,6 @@ public class Metamodel {
         return "SELECT COUNT(*) FROM " + this.tableName;
     }
 
-
-    public String buildSelectAll(){
-        return "SELECT * FROM " + this.tableName;
-    }
-
     public String buildMergeRequest() {
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
@@ -151,14 +149,25 @@ public class Metamodel {
 
 
     public List<ColumnField> getOneToManyColumns() {
-        return getColumnsWithForeignKeysWithoutId()
-                .stream().filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
+        return getReferencesColumns().stream()
+                .filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
+                .toList();
+    }
+
+    public List<ColumnField> getManyToOneColumns() {
+        return getReferencesColumns().stream()
+                .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .toList();
     }
 
     public boolean isOneToManyPresent() {
-        return getColumnsWithForeignKeysWithoutId()
+        return getReferencesColumns()
                 .stream().anyMatch(el -> el.getField().isAnnotationPresent(OneToMany.class));
+    }
+
+    public boolean isManyToOnePresent() {
+        return getReferencesColumns()
+                .stream().anyMatch(el -> el.getField().isAnnotationPresent(ManyToOne.class));
     }
 }
 
