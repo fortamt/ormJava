@@ -58,7 +58,19 @@ public class MainClient {
 
         System.out.println(ormManager.count(Zoo.class));
 
+        var zoo3 = new Zoo("myZoo");
 
+        var bear = new Animal("Misha", LocalDate.of(2010, 5, 5));
+        var parrot = new Animal("Red", LocalDate.of(2020, 2, 1));
+        ormManager.persist(bear);
+        ormManager.persist(parrot);
+        zoo3.addAnimal(bear);
+        zoo3.addAnimal(parrot);
+        ormManager.persist(zoo3);
+
+        zoo3.setName("My Zoo");
+        parrot.setName("Kesha");
+        ormManager.saveOrUpdate(zoo3);
 //        testManyToOne();
     }
 

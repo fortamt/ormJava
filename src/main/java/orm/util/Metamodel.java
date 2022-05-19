@@ -87,7 +87,7 @@ public class Metamodel {
         return getColumns()
                 .stream()
                 .map(el -> {
-                    if(el.getField().isAnnotationPresent(ManyToOne.class)){
+                    if (el.getField().isAnnotationPresent(ManyToOne.class)) {
                         return el.getField().getAnnotation(ManyToOne.class).name();
                     } else {
                         return el.getName();
@@ -100,7 +100,7 @@ public class Metamodel {
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
                 .map(el -> {
-                    if(el.getField().isAnnotationPresent(ManyToOne.class)){
+                    if (el.getField().isAnnotationPresent(ManyToOne.class)) {
                         return el.getField().getAnnotation(ManyToOne.class).name() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
                     } else {
                         return el.getName() + " " + types.get(el.getType());
@@ -111,11 +111,11 @@ public class Metamodel {
         return "create table if not exists " + tableName + " (" +
                 id + " int not null auto_increment," +
                 columns +
-                ", primary key ("+id+")" +
+                ", primary key (" + id + ")" +
                 ")";
     }
 
-    public String buildConstraintSqlRequest(){
+    public String buildConstraintSqlRequest() {
         return getColumns().stream()
                 .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .map(el ->
@@ -147,10 +147,15 @@ public class Metamodel {
     public String buildMergeRequest() {
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
-                .map(el -> el.getName() + "=?")
-                .collect(Collectors.joining(", "));
+                .map(el -> {
+                    if (el.getField().isAnnotationPresent(ManyToOne.class)) {
+                        return el.getField().getAnnotation(ManyToOne.class).name() + "=?";
+                    } else {
+                        return el.getName() + "=?";
+                    }
+                }).collect(Collectors.joining(", "));
 
-        return "UPDATE " + tableName + " SET " + columns + " WHERE " +id+ " = ?";
+        return "UPDATE " + tableName + " SET " + columns + " WHERE " + id + " = ?";
     }
 
 
