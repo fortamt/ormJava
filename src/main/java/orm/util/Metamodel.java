@@ -86,7 +86,13 @@ public class Metamodel {
     private String buildColumnNames() {
         return getColumns()
                 .stream()
-                .map(ColumnField::getName)
+                .map(el -> {
+                    if(el.getField().isAnnotationPresent(ManyToOne.class)){
+                        return el.getField().getAnnotation(ManyToOne.class).name();
+                    } else {
+                        return el.getName();
+                    }
+                })
                 .collect(Collectors.joining(", "));
     }
 
@@ -95,7 +101,7 @@ public class Metamodel {
         String columns = getColumns().stream()
                 .map(el -> {
                     if(el.getField().isAnnotationPresent(ManyToOne.class)){
-                        return el.getName() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
+                        return el.getField().getAnnotation(ManyToOne.class).name() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
                     } else {
                         return el.getName() + " " + types.get(el.getType());
                     }
@@ -114,7 +120,7 @@ public class Metamodel {
                 .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .map(el ->
                         "ALTER TABLE " + this.tableName +
-                                " ADD FOREIGN KEY (" + el.getName() + ") " +
+                                " ADD FOREIGN KEY (" + el.getField().getAnnotation(ManyToOne.class).name() + ") " +
                                 "REFERENCES " + Metamodel.of(el.getType()).tableName + "(" + Metamodel.of(el.getType()).getPrimaryKey().getName() + ")")
                 .collect(Collectors.joining(" "));
     }
