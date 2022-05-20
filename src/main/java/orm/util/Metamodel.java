@@ -41,15 +41,18 @@ public class Metamodel {
                 .toList();
     }
 
-    public List<ColumnField> getColumnsWithForeignKeysWithoutId() {
+    private List<ColumnField> getReferencesColumns() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
             ColumnField columnField = new ColumnField(field);
             columnFields.add(columnField);
         }
-        return columnFields.stream().filter(el -> !el.getField().isAnnotationPresent(Id.class)).toList();
+        return columnFields.stream()
+                .filter(el -> el.getField().isAnnotationPresent(OneToMany.class) || el.getField().isAnnotationPresent(ManyToOne.class))
+                .toList();
     }
+
 
     public IdField getPrimaryKey() {
         Field[] fields = clss.getDeclaredFields();
@@ -83,7 +86,13 @@ public class Metamodel {
     private String buildColumnNames() {
         return getColumns()
                 .stream()
-                .map(ColumnField::getName)
+                .map(el -> {
+                    if(el.getField().isAnnotationPresent(ManyToOne.class)){
+                        return el.getField().getAnnotation(ManyToOne.class).name();
+                    } else {
+                        return el.getName();
+                    }
+                })
                 .collect(Collectors.joining(", "));
     }
 
@@ -92,7 +101,7 @@ public class Metamodel {
         String columns = getColumns().stream()
                 .map(el -> {
                     if(el.getField().isAnnotationPresent(ManyToOne.class)){
-                        return el.getName() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
+                        return el.getField().getAnnotation(ManyToOne.class).name() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
                     } else {
                         return el.getName() + " " + types.get(el.getType());
                     }
@@ -111,7 +120,7 @@ public class Metamodel {
                 .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .map(el ->
                         "ALTER TABLE " + this.tableName +
-                                " ADD FOREIGN KEY (" + el.getName() + ") " +
+                                " ADD FOREIGN KEY (" + el.getField().getAnnotation(ManyToOne.class).name() + ") " +
                                 "REFERENCES " + Metamodel.of(el.getType()).tableName + "(" + Metamodel.of(el.getType()).getPrimaryKey().getName() + ")")
                 .collect(Collectors.joining(" "));
     }
@@ -135,11 +144,6 @@ public class Metamodel {
         return "SELECT COUNT(*) FROM " + this.tableName;
     }
 
-
-    public String buildSelectAll(){
-        return "SELECT * FROM " + this.tableName;
-    }
-
     public String buildMergeRequest() {
         String id = getPrimaryKey().getName();
         String columns = getColumns().stream()
@@ -151,14 +155,35 @@ public class Metamodel {
 
 
     public List<ColumnField> getOneToManyColumns() {
-        return getColumnsWithForeignKeysWithoutId()
-                .stream().filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
+        return getReferencesColumns().stream()
+                .filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
                 .toList();
     }
 
+    public List<ColumnField> getManyToOneColumns() {
+        return getReferencesColumns().stream()
+                .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
+                .toList();
+    }
+
+    public List<ColumnField> getColumnsWithReferencesWithoutId() {
+        List<ColumnField> columnFields = new ArrayList<>();
+        Field[] fields = clss.getDeclaredFields();
+        for (Field field : fields) {
+            ColumnField columnField = new ColumnField(field);
+            columnFields.add(columnField);
+        }
+        return columnFields.stream().filter(field -> !field.getField().isAnnotationPresent(Id.class)).toList();
+    }
+
     public boolean isOneToManyPresent() {
-        return getColumnsWithForeignKeysWithoutId()
+        return getReferencesColumns()
                 .stream().anyMatch(el -> el.getField().isAnnotationPresent(OneToMany.class));
+    }
+
+    public boolean isManyToOnePresent() {
+        return getReferencesColumns()
+                .stream().anyMatch(el -> el.getField().isAnnotationPresent(ManyToOne.class));
     }
 }
 
