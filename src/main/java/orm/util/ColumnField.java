@@ -1,6 +1,7 @@
 package orm.util;
 
 import orm.annotation.Column;
+import orm.annotation.ManyToOne;
 
 import java.lang.reflect.Field;
 
@@ -11,7 +12,11 @@ public class ColumnField {
 
     public ColumnField(Field field) {
         this.field = field;
-        this.column = field.getName();
+        if(field.isAnnotationPresent(ManyToOne.class)){
+            this.column = field.getAnnotation(ManyToOne.class).name();
+        } else {
+            this.column = field.getName();
+        }
     }
 
     public String getName() {
