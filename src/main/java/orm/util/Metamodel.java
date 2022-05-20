@@ -25,6 +25,10 @@ public class Metamodel {
         this.tableName = this.clss.getAnnotation(Table.class).name().equals("") ? clss.getName() : this.clss.getAnnotation(Table.class).name();
     }
 
+    public Class<?> getClss(){
+        return clss;
+    }
+
     public String getClassName() {
         return tableName;
     }
@@ -133,11 +137,15 @@ public class Metamodel {
         return "select * from " + clss.getSimpleName() + " where id = ?";
     }
 
-    public String buildSelectRequest() {
+    public String buildSelectByIdRequest() {
         // select id, name, age from Person where id = ?
         return "select * from " + this.tableName +
                 " where " + getPrimaryKey().getName() + " = ?";
 
+    }
+
+    public String buildSelectByForeignKey(Field field, Object id) {
+        return "select * from " + this.tableName + " where " + field.getAnnotation(ManyToOne.class).name() + "=" + id.toString();
     }
 
     public String buildCountRowsRequest() {
