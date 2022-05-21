@@ -53,9 +53,16 @@ public class OrmManager {
         try (PreparedStatement statement = prepareStatementWith(sql).andParameters(t)) {
             statement.executeUpdate();
             setIdToObjectAfterPersisting(t, statement);
-//            if(metamodel.isOneToManyPresent()) {
-//                getListOneToManyReferences(t);
-//            }
+            if(metamodel.isOneToManyPresent()) {
+                for(var list: getMapOneToMany(t).entrySet()) {
+                    for(var el: list.getValue()) {
+                        persist(el);
+                    }
+                }
+            }
+            if(!isPresentInCache(t.getClass(), getPrimaryKeyValue(t))) {
+                putInCache(t);
+            }
         }
     }
 
@@ -92,10 +99,17 @@ public class OrmManager {
                     statement.setDate(columnIndex + 1, new Date(date.getTime()));
                 }
                 if(field.isAnnotationPresent(ManyToOne.class)) {
-                    Field fieldForForeignKey = value.getClass().getDeclaredField("id");
-                    fieldForForeignKey.setAccessible(true);
-                    int id = Math.toIntExact((Long) fieldForForeignKey.get(value));
-                    statement.setInt(columnIndex + 1, id);
+                    for(var el: getListManyToOne(t)) {
+                        if(el != null) {
+                            Metamodel metamodelForManyToOne = Metamodel.of(el.getClass());
+                            Field fieldForManyToOne = metamodelForManyToOne.getPrimaryKey().getField();
+                            fieldForManyToOne.setAccessible(true);
+                            Object idToInsert = fieldForManyToOne.get(el);
+                            statement.setObject(columnIndex + 1, idToInsert);
+                        } else {
+                            statement.setNull(columnIndex + 1, 4); //4 is SQL type code for integer
+                        }
+                    }
                 }
             }
             return statement;
@@ -148,7 +162,7 @@ public class OrmManager {
         }
     }
 
-    private <T> Map<String, List<?>> getListOneToManyReferences(T t) throws IllegalAccessException{
+    private <T> Map<String, List<?>> getMapOneToMany(T t) throws IllegalAccessException{
         Metamodel metamodel = Metamodel.of(t.getClass());
         Map<String, List<?>> listOfLists = new HashMap();
         for(var el: metamodel.getOneToManyColumns()) {
@@ -158,7 +172,7 @@ public class OrmManager {
         return listOfLists;
     }
 
-    private <T> List<Object> getListManyToOneReferences(T t) throws IllegalAccessException{
+    private <T> List<Object> getListManyToOne(T t) throws IllegalAccessException{
         Metamodel metamodel = Metamodel.of(t.getClass());
         List<Object> listOfLists = new ArrayList<>();
         for(var el: metamodel.getManyToOneColumns()) {
@@ -197,20 +211,20 @@ public class OrmManager {
                 cascadeChain(id, clss, t);
             }
             if(metamodel.isManyToOnePresent()){
-                for (Object o : getListManyToOneReferences(t)) {
+                for (Object o : getListManyToOne(t)) {
                     load(getPrimaryKeyValue(o), o.getClass());
                 }
             }
             return t;
-            } catch (SQLException | InvocationTargetException | InstantiationException | IllegalAccessException |
-                     NoSuchMethodException e) {
-                e.printStackTrace();
-            }
+        } catch (SQLException | InvocationTargetException | InstantiationException | IllegalAccessException |
+                NoSuchMethodException e) {
+            e.printStackTrace();
+        }
         throw new ObjectNotFoundException("Cannot load object");
     }
 
     private <T> void cascadeChain(Object id, Class<T> clss, T t) throws IllegalAccessException, SQLException, InstantiationException, InvocationTargetException, NoSuchMethodException {
-        for (Map.Entry<String, List<?>> stringListEntry : getListOneToManyReferences(t).entrySet()) {
+        for (Map.Entry<String, List<?>> stringListEntry : getMapOneToMany(t).entrySet()) {
             Metamodel innerMetamodel = Metamodel.of(getGenericTypeOfList(stringListEntry.getKey(), clss));
             for (ColumnField manyToOneColumn : innerMetamodel.getManyToOneColumns()) {
                 iterateFields(id, clss, t, stringListEntry, innerMetamodel, manyToOneColumn);
@@ -273,6 +287,11 @@ public class OrmManager {
         var key = resultSet.getObject(columnName, keyType);
         field.setAccessible(true);
         field.set(t, key);
+    }
+
+    private <T> void setFieldValue(Field field, T t, Object value) throws IllegalAccessException {
+        field.setAccessible(true);
+        field.set(t, value);
     }
 
     public void update(Object obj) {
@@ -396,20 +415,48 @@ public class OrmManager {
         return result;
     }
 
-    public void remove(Object entity) {
+    public void remove(Object entity) throws IllegalAccessException {
         // send delete to DB and set id to null
         Metamodel metamodel = Metamodel.of(entity.getClass());
-        try (PreparedStatement st = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
-            IdField idField = metamodel.getPrimaryKey();
-            Field field = idField.getField();
-            field.setAccessible(true);
-            Long idToRemove = (Long) field.get(entity);
-            field.set(entity, null);
-            st.setInt(1, Math.toIntExact(idToRemove));
+        if(metamodel.isOneToManyPresent()) {
+            for(var el: getMapOneToMany(entity).entrySet()) {
+                removeCascade(el.getValue());
+            }
+        }
+        try(PreparedStatement ps = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
+            Object idToRemove = getPrimaryKeyValue(entity);
+            ps.setObject(1, idToRemove);
+            setFieldValue(metamodel.getPrimaryKey().getField(), entity, null);
+            if(metamodel.isManyToOnePresent()) {
+                for(var manyToOneField: metamodel.getManyToOneColumns()) {
+                    setFieldValue(manyToOneField.getField(), entity, null);
+                }
+            }
+            ps.executeUpdate();
         } catch (SQLException throwables) {
-            processSqlException(throwables);
-        } catch (IllegalAccessException throwables) {
             throwables.printStackTrace();
+        }
+    }
+
+    private void removeCascade(List<?> list) {
+        if(list.isEmpty()) {
+            return;
+        }
+        Metamodel metamodel = Metamodel.of(list.get(0).getClass());
+        for(var el: list) {
+            try(PreparedStatement ps = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
+                Object idToRemove = getPrimaryKeyValue(el);
+                ps.setObject(1, idToRemove);
+                setFieldValue(metamodel.getPrimaryKey().getField(), el, null);
+                for(var manyToOneObj: metamodel.getManyToOneColumns()) {
+                    setFieldValue(manyToOneObj.getField(), el, null);
+                }
+                ps.executeUpdate();
+            } catch (SQLException throwables) {
+                processSqlException(throwables);
+            } catch (IllegalAccessException e) {
+                processIAException(e);
+            }
         }
     }
 
@@ -422,7 +469,11 @@ public class OrmManager {
     }
 
     public boolean isPresentInCache(Class<?> clss, Object id){
-        return cache.get(clss).containsKey(id);
+        if(cache.size() == 0 || cache.get(clss) == null) {
+            return false;
+        } else {
+            return cache.get(clss).containsKey(id);
+        }
     }
 
     private <T> boolean putInCache(T t){
