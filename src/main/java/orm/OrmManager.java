@@ -215,6 +215,7 @@ public class OrmManager {
                     if(o != null) {
                         load(getPrimaryKeyValue(o), o.getClass());
                     }
+                    load(getPrimaryKeyValue(o), o.getClass());
                 }
             }
             return t;
