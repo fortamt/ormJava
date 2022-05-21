@@ -229,6 +229,9 @@ public class OrmManager {
             }
             if (metamodel.isManyToOnePresent()) {
                 for (Object o : getListManyToOne(t)) {
+                    if(o != null) {
+                        load(getPrimaryKeyValue(o), o.getClass());
+                    }
                     load(getPrimaryKeyValue(o), o.getClass());
                 }
             }
@@ -311,16 +314,18 @@ public class OrmManager {
         field.set(t, key);
     }
 
+    private <T> void setFieldValue(Field field, T t, Object value) throws IllegalAccessException {
+        field.setAccessible(true);
+        field.set(t, value);
+    }
+
     public void update(Object obj) {
         // go to DB to table = obj.getClass at PK = obj id
         // and set the fields of the obj <= data from DB
         Metamodel metamodel = Metamodel.of(obj.getClass());
         try (PreparedStatement ps = connection.prepareStatement(metamodel.buildSelectByIdSqlRequest())) {
-            IdField idField = metamodel.getPrimaryKey();
-            Field fieldForId = idField.getField();
-            fieldForId.setAccessible(true);
-            Long idToSelect = (Long) fieldForId.get(obj);
-            ps.setInt(1, Math.toIntExact(idToSelect));
+            Object idToSelect = getPrimaryKeyValue(obj);
+            ps.setObject(1, idToSelect);
             ResultSet rs = ps.executeQuery();
             rs.next();
             for (var el : metamodel.getColumns()) {
@@ -433,20 +438,54 @@ public class OrmManager {
         return result;
     }
 
-    public void remove(Object entity) {
+    public void remove(Object entity) throws IllegalAccessException {
         // send delete to DB and set id to null
         Metamodel metamodel = Metamodel.of(entity.getClass());
-        try (PreparedStatement st = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
-            IdField idField = metamodel.getPrimaryKey();
-            Field field = idField.getField();
-            field.setAccessible(true);
-            Long idToRemove = (Long) field.get(entity);
-            field.set(entity, null);
-            st.setInt(1, Math.toIntExact(idToRemove));
+        if(isPresentInCache(entity.getClass(), getPrimaryKeyValue(entity))) {
+            removeFromCache(entity);
+        }
+        if(metamodel.isOneToManyPresent()) {
+            for(var el: getMapOneToMany(entity).entrySet()) {
+                removeCascade(el.getValue());
+            }
+        }
+        try(PreparedStatement ps = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
+            Object idToRemove = getPrimaryKeyValue(entity);
+            ps.setObject(1, idToRemove);
+            setFieldValue(metamodel.getPrimaryKey().getField(), entity, null);
+            if(metamodel.isManyToOnePresent()) {
+                for(var manyToOneField: metamodel.getManyToOneColumns()) {
+                    setFieldValue(manyToOneField.getField(), entity, null);
+                }
+            }
+            ps.executeUpdate();
         } catch (SQLException throwables) {
-            processSqlException(throwables);
-        } catch (IllegalAccessException throwables) {
             throwables.printStackTrace();
+        }
+    }
+
+    private void removeCascade(List<?> list) throws IllegalAccessException {
+        if(list.isEmpty()) {
+            return;
+        }
+        Metamodel metamodel = Metamodel.of(list.get(0).getClass());
+        for(var el: list) {
+            if(isPresentInCache(el.getClass(), getPrimaryKeyValue(el))) {
+                removeFromCache(el);
+            }
+            try(PreparedStatement ps = connection.prepareStatement(metamodel.buildRemoveSqlRequest())) {
+                Object idToRemove = getPrimaryKeyValue(el);
+                ps.setObject(1, idToRemove);
+                setFieldValue(metamodel.getPrimaryKey().getField(), el, null);
+                for(var manyToOneObj: metamodel.getManyToOneColumns()) {
+                    setFieldValue(manyToOneObj.getField(), el, null);
+                }
+                ps.executeUpdate();
+            } catch (SQLException throwables) {
+                processSqlException(throwables);
+            } catch (IllegalAccessException e) {
+                processIAException(e);
+            }
         }
     }
 
@@ -482,6 +521,20 @@ public class OrmManager {
         cache.get(t.getClass()).put(key, t);
         return true;
     }
+
+    private <T> boolean removeFromCache(T t) {
+        if(t == null) {
+            return false;
+        }
+        try {
+            cache.get(t.getClass()).remove(getPrimaryKeyValue(t));
+        } catch (IllegalAccessException e) {
+            processIAException(e);
+            return false;
+        }
+        return true;
+    }
+
 
     private Class<?> getGenericTypeOfList(String fieldName, Class<?> clss) {
         Field listField;
