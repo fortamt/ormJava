@@ -66,6 +66,5 @@ class OrmMethodsTest {
         Animal animal11 = ormManager.load(animal1.getId(), Animal.class);
         assertTrue(ormManager.isPresentInCache(Zoo.class, animal11.getZoo().getId()));
         assertTrue(ormManager.isPresentInCache(Animal.class, animal2.getId()));
-        System.out.println(ormManager.cache.get(Animal.class).get(animal2.getId()));
     }
 }

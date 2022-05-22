@@ -25,7 +25,7 @@ public class OrmUtilMethods {
         return listOfLists;
     }
 
-    static  <T> void setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
+    static <T> void setIdToObjectAfterPersisting(T t, PreparedStatement ps) throws SQLException, IllegalAccessException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         ResultSet resultSet = ps.getGeneratedKeys();
         if (resultSet.next()) {
@@ -38,7 +38,7 @@ public class OrmUtilMethods {
         }
     }
 
-    static  <T> Map<String, List<?>> getMapOneToMany(T t) throws IllegalAccessException {
+    static <T> Map<String, List<?>> getMapOneToMany(T t) throws IllegalAccessException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         Map<String, List<?>> listOfLists = new HashMap<>();
         for (var el : metamodel.getOneToManyColumns()) {

@@ -8,8 +8,9 @@ import java.util.List;
 
 
 @Entity
-@Getter @Setter
-@Table(name="Zoo")
+@Getter
+@Setter
+@Table(name = "Zoo")
 @NoArgsConstructor
 @RequiredArgsConstructor
 @ToString
@@ -17,20 +18,20 @@ public class Zoo {
     @Id(name = "id")
     Long id;
 
-    @Column(name="name")
+    @Column(name = "name")
     @NonNull
     String name;
 
     @ToString.Exclude
-    @OneToMany(mappedBy="zoo")
+    @OneToMany(mappedBy = "zoo")
     List<Animal> animals = new ArrayList<>();
 
-    public void addAnimal(Animal animal){
+    public void addAnimal(Animal animal) {
         this.getAnimals().add(animal);
         animal.setZoo(this);
     }
 
-    public void removeAnimal(Animal animal){
+    public void removeAnimal(Animal animal) {
         getAnimals().remove(animal);
         animal.setZoo(null);
     }
