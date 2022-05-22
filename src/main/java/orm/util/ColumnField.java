@@ -12,9 +12,9 @@ public class ColumnField {
 
     public ColumnField(Field field) {
         this.field = field;
-        if(field.isAnnotationPresent(ManyToOne.class)){
+        if (field.isAnnotationPresent(ManyToOne.class)) {
             this.column = field.getAnnotation(ManyToOne.class).name();
-        } else if(field.isAnnotationPresent(Column.class)){
+        } else if (field.isAnnotationPresent(Column.class)) {
             this.column = field.getAnnotation(Column.class).name();
         } else {
             this.column = field.getName();

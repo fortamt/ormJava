@@ -13,7 +13,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
 import java.sql.Date;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.*;
 
 import static orm.OrmUtilMethods.*;
@@ -43,6 +42,29 @@ public class OrmManager {
         }
     }
 
+    public void registerEntities(Class<?>... entityClasses) {
+        // prepare MetaInfo, create the tables in the DB
+        for (Class<?> clss : entityClasses) {
+            Metamodel metamodel = Metamodel.of(clss);
+            String sql = metamodel.buildTableInDbRequest();
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(sql);
+            } catch (SQLException e) {
+                throw new RuntimeException("Error in registerEntities() method");
+            }
+        }
+
+        for (Class<?> clss : entityClasses) {
+            Metamodel metamodel = Metamodel.of(clss);
+            String sql = metamodel.buildConstraintSqlRequest();
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(sql);
+            } catch (SQLException e) {
+                throw new RuntimeException("Error in registerEntities() method");
+            }
+        }
+    }
+
     public <T> void persist(T t) throws IllegalArgumentException, IllegalAccessException, SQLException, NoSuchFieldException {
         Metamodel metamodel = Metamodel.of(t.getClass());
         String sql = metamodel.buildInsertSqlRequest(); // building sql request like "insert into Zoo (name) values (?)"
@@ -62,60 +84,20 @@ public class OrmManager {
         }
     }
 
-    private PreparedStatementWrapper prepareStatementWith(String sql) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-        return new PreparedStatementWrapper(statement);
-    }
-
-    private class PreparedStatementWrapper {
-
-        private PreparedStatement statement;
-        int index = 1;
-
-        public PreparedStatementWrapper(PreparedStatement statement) {
-            this.statement = statement;
+    public <T> T load(Object id, Class<T> clss) {
+        // from DB find the row with PK = id in the table
+        // where the objects of given type reside
+        var result = findInCache(clss, id);
+        if (result.isPresent()) {
+            return (T) result.get();
         }
-
-        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
-            index = 1;
-            Metamodel metamodel = Metamodel.of(t.getClass());
-            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
-                if (databaseColumn.getField().isAnnotationPresent(ManyToOne.class)) {
-                    for (var el : getListManyToOne(t)) {
-                        if (el != null) {
-                            Metamodel metamodelForManyToOne = Metamodel.of(el.getClass());
-                            Field fieldForManyToOne = metamodelForManyToOne.getPrimaryKey().getField();
-                            fieldForManyToOne.setAccessible(true);
-                            Object idToInsert = fieldForManyToOne.get(el);
-                            statement.setObject(index++, idToInsert);
-                        } else {
-                            statement.setNull(index++, 4); //4 is SQL type code for integer
-                        }
-                    }
-                } else {
-                    databaseColumn.getField().setAccessible(true);
-                    statement.setObject(index++, databaseColumn.getField().get(t));
-                }
-            }
-            return statement;
-        }
-
-        public <T> PreparedStatement andParametersAndKey(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
-            Metamodel metamodel = Metamodel.of(t.getClass());
-            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
-                databaseColumn.getField().setAccessible(true);
-                statement.setObject(index++, databaseColumn.getField().get(t));
-            }
-            Object value = getPrimaryKeyValue(t);
-            statement.setObject(index++, value);
-            return statement;
-        }
-
-        public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
-            if (primaryKey.getClass() == Long.class) {
-                statement.setLong(1, (Long) primaryKey);
-            }
-            return statement;
+        Metamodel metamodel = Metamodel.of(clss);
+        String sql = metamodel.buildSelectByIdRequest();
+        try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id); ResultSet resultSet = statement.executeQuery()) {
+            return buildInstanceFrom(clss, resultSet, id);
+        } catch (SQLException | InvocationTargetException | InstantiationException | IllegalAccessException |
+                 NoSuchMethodException e) {
+            throw new RuntimeException("Cannot load object");
         }
     }
 
@@ -144,97 +126,6 @@ public class OrmManager {
         } catch (SQLException e) {
             throw new RuntimeException("SQL exception in merge() method");
         }
-    }
-
-    public <T> T load(Object id, Class<T> clss) {
-        // from DB find the row with PK = id in the table
-        // where the objects of given type reside
-        var result = findInCache(clss, id);
-        if (result.isPresent()) {
-            return (T) result.get();
-        }
-        Metamodel metamodel = Metamodel.of(clss);
-        String sql = metamodel.buildSelectByIdRequest();
-        try (PreparedStatement statement = prepareStatementWith(sql).andPrimaryKey(id);
-             ResultSet resultSet = statement.executeQuery()) {
-            return buildInstanceFrom(clss, resultSet, id);
-        } catch (SQLException | InvocationTargetException | InstantiationException | IllegalAccessException |
-                 NoSuchMethodException e) {
-            throw new RuntimeException("Cannot load object");
-        }
-    }
-
-    private <T> T buildInstanceFrom(Class<T> clss, ResultSet resultSet, Object id) throws
-            InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, SQLException {
-
-        Metamodel metamodel = Metamodel.of(clss);
-
-        T t = clss.getConstructor().newInstance();
-        Field primaryKeyField = metamodel.getPrimaryKey().getField();
-        String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
-        Class<?> primaryKeyType = primaryKeyField.getType();
-        resultSet.next();
-        setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType);
-        putInCache(t);
-
-        for (ColumnField columnField : metamodel.getAllColumnsExcludeId()) {
-            Field field = columnField.getField();
-            field.setAccessible(true);
-            Class<?> columnType = columnField.getType();
-            String columnName = columnField.getName();
-            if (field.isAnnotationPresent(ManyToOne.class)) {
-                setFieldValue(resultSet, t, field, columnName);
-            } else if (field.isAnnotationPresent(OneToMany.class)) {
-                setFieldValue(t, field, id);
-            } else {
-                setFieldValue(resultSet, t, field, columnName, columnType);
-            }
-        }
-        return t;
-    }
-
-    private <T> void setFieldValue(T t, Field field, Object id) throws
-            SQLException, IllegalAccessException {
-        List<Object> resultList = new ArrayList<>();
-        List<Long> idList = new ArrayList<>();
-        Metamodel metamodel = Metamodel.of(getGenericTypeOfList(field.getName(), t.getClass()));
-        for (ColumnField manyToOneColumn : metamodel.getManyToOneColumns()) {
-            if (manyToOneColumn.getType() == t.getClass()) {
-                String sql = metamodel.buildSelectByForeignKey(metamodel, manyToOneColumn.getField(), id);
-                try (PreparedStatement innerStatement = connection.prepareStatement(sql);
-                     ResultSet innerResultSet = innerStatement.executeQuery()) {
-                    while (innerResultSet.next()) {
-                        var temp = innerResultSet.getLong(1);
-                        idList.add(temp);
-                    }
-                }
-            }
-        }
-        for (Long el : idList) {
-            resultList.add(load(el, metamodel.getClss()));
-        }
-        field.setAccessible(true);
-        field.set(t, resultList);
-    }
-
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName) throws
-            SQLException, IllegalAccessException {
-        var primaryKey = resultSet.getObject(columnName, Long.class);
-        var key = load(primaryKey, field.getType());
-        field.setAccessible(true);
-        field.set(t, key);
-    }
-
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws
-            SQLException, IllegalAccessException {
-        var key = resultSet.getObject(columnName, keyType);
-        field.setAccessible(true);
-        field.set(t, key);
-    }
-
-    private <T> void setFieldValue(Field field, T t, Object value) throws IllegalAccessException {
-        field.setAccessible(true);
-        field.set(t, value);
     }
 
     public void update(Object obj) {
@@ -281,31 +172,8 @@ public class OrmManager {
         return result;
     }
 
-    public void registerEntities(Class<?>... entityClasses) {
-        // prepare MetaInfo, create the tables in the DB
-        for (Class<?> clss : entityClasses) {
-            Metamodel metamodel = Metamodel.of(clss);
-            String sql = metamodel.buildTableInDbRequest();
-            try (Statement statement = connection.createStatement()) {
-                statement.execute(sql);
-            } catch (SQLException e) {
-                throw new RuntimeException("Error in registerEntities() method");
-            }
-        }
-
-        for (Class<?> clss : entityClasses) {
-            Metamodel metamodel = Metamodel.of(clss);
-            String sql = metamodel.buildConstraintSqlRequest();
-            try (Statement statement = connection.createStatement()) {
-                statement.execute(sql);
-            } catch (SQLException e) {
-                throw new RuntimeException("Error in registerEntities() method");
-            }
-        }
-    }
-
     public <T> Optional<T> find(Class<T> entityClass, Object id) {
-            return Optional.ofNullable(load(id, entityClass));
+        return Optional.ofNullable(load(id, entityClass));
     }
 
     public <T> Collection<T> findAll(Class<T> entityClass) {
@@ -370,6 +238,131 @@ public class OrmManager {
         }
     }
 
+    private PreparedStatementWrapper prepareStatementWith(String sql) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+        return new PreparedStatementWrapper(statement);
+    }
+
+    private class PreparedStatementWrapper {
+
+        private PreparedStatement statement;
+        int index = 1;
+
+        public PreparedStatementWrapper(PreparedStatement statement) {
+            this.statement = statement;
+        }
+
+        public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+            index = 1;
+            Metamodel metamodel = Metamodel.of(t.getClass());
+            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
+                if (databaseColumn.getField().isAnnotationPresent(ManyToOne.class)) {
+                    for (var el : getListManyToOne(t)) {
+                        if (el != null) {
+                            Metamodel metamodelForManyToOne = Metamodel.of(el.getClass());
+                            Field fieldForManyToOne = metamodelForManyToOne.getPrimaryKey().getField();
+                            fieldForManyToOne.setAccessible(true);
+                            Object idToInsert = fieldForManyToOne.get(el);
+                            statement.setObject(index++, idToInsert);
+                        } else {
+                            statement.setNull(index++, 4); //4 is SQL type code for integer
+                        }
+                    }
+                } else {
+                    databaseColumn.getField().setAccessible(true);
+                    statement.setObject(index++, databaseColumn.getField().get(t));
+                }
+            }
+            return statement;
+        }
+
+        public <T> PreparedStatement andParametersAndKey(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+            Metamodel metamodel = Metamodel.of(t.getClass());
+            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
+                databaseColumn.getField().setAccessible(true);
+                statement.setObject(index++, databaseColumn.getField().get(t));
+            }
+            Object value = getPrimaryKeyValue(t);
+            statement.setObject(index++, value);
+            return statement;
+        }
+
+        public PreparedStatement andPrimaryKey(Object primaryKey) throws SQLException {
+            if (primaryKey.getClass() == Long.class) {
+                statement.setLong(1, (Long) primaryKey);
+            }
+            return statement;
+        }
+    }
+
+    private <T> T buildInstanceFrom(Class<T> clss, ResultSet resultSet, Object id) throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, SQLException {
+
+        Metamodel metamodel = Metamodel.of(clss);
+
+        T t = clss.getConstructor().newInstance();
+        Field primaryKeyField = metamodel.getPrimaryKey().getField();
+        String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
+        Class<?> primaryKeyType = primaryKeyField.getType();
+        resultSet.next();
+        setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType);
+        putInCache(t);
+
+        for (ColumnField columnField : metamodel.getAllColumnsExcludeId()) {
+            Field field = columnField.getField();
+            field.setAccessible(true);
+            Class<?> columnType = columnField.getType();
+            String columnName = columnField.getName();
+            if (field.isAnnotationPresent(ManyToOne.class)) {
+                setFieldValue(resultSet, t, field, columnName);
+            } else if (field.isAnnotationPresent(OneToMany.class)) {
+                setFieldValue(t, field, id);
+            } else {
+                setFieldValue(resultSet, t, field, columnName, columnType);
+            }
+        }
+        return t;
+    }
+
+    private <T> void setFieldValue(T t, Field field, Object id) throws SQLException, IllegalAccessException {
+        List<Object> resultList = new ArrayList<>();
+        List<Long> idList = new ArrayList<>();
+        Metamodel metamodel = Metamodel.of(getGenericTypeOfList(field.getName(), t.getClass()));
+        for (ColumnField manyToOneColumn : metamodel.getManyToOneColumns()) {
+            if (manyToOneColumn.getType() == t.getClass()) {
+                String sql = metamodel.buildSelectByForeignKey(metamodel, manyToOneColumn.getField(), id);
+                try (PreparedStatement innerStatement = connection.prepareStatement(sql); ResultSet innerResultSet = innerStatement.executeQuery()) {
+                    while (innerResultSet.next()) {
+                        var temp = innerResultSet.getLong(1);
+                        idList.add(temp);
+                    }
+                }
+            }
+        }
+        for (Long el : idList) {
+            resultList.add(load(el, metamodel.getClss()));
+        }
+        field.setAccessible(true);
+        field.set(t, resultList);
+    }
+
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName) throws SQLException, IllegalAccessException {
+        var primaryKey = resultSet.getObject(columnName, Long.class);
+        var key = load(primaryKey, field.getType());
+        field.setAccessible(true);
+        field.set(t, key);
+    }
+
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws SQLException, IllegalAccessException {
+        var key = resultSet.getObject(columnName, keyType);
+        field.setAccessible(true);
+        field.set(t, key);
+    }
+
+    private <T> void setFieldValue(Field field, T t, Object value) throws IllegalAccessException {
+        field.setAccessible(true);
+        field.set(t, value);
+    }
+
     private void removeCascade(List<?> list) throws IllegalAccessException {
         if (list.isEmpty()) {
             return;
@@ -401,7 +394,7 @@ public class OrmManager {
         }
     }
 
-    public boolean isPresentInCache(Class<?> clss, Object id) {
+    boolean isPresentInCache(Class<?> clss, Object id) {
         if (cache.size() == 0 || cache.get(clss) == null) {
             return false;
         }
