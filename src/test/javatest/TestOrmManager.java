@@ -1,3 +1,5 @@
+package javatest;
+
 import client.model.entity.Animal;
 import client.model.entity.Zoo;
 import org.junit.jupiter.api.BeforeEach;
