@@ -45,7 +45,7 @@ public class Metamodel {
                 .toList();
     }
 
-    private List<ColumnField> getReferencesColumns() {
+    public List<ColumnField> getColumnsNew() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
@@ -53,17 +53,29 @@ public class Metamodel {
             columnFields.add(columnField);
         }
         return columnFields.stream()
-                .filter(el -> el.getField().isAnnotationPresent(OneToMany.class) || el.getField().isAnnotationPresent(ManyToOne.class))
+                .filter(el -> !el.getField().isAnnotationPresent(Id.class))
                 .toList();
     }
 
+    private List<ColumnField> getReferencesColumns() {
+        List<ColumnField> columnFields = new ArrayList<>();
+        Field[] fields = clss.getDeclaredFields();
+        for (Field field : fields) {
+            if(field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToOne.class)){
+                ColumnField columnField = new ColumnField(field);
+                columnFields.add(columnField);
+            }
+        }
+        return columnFields;
+    }
 
-    public IdField getPrimaryKey() {
+
+    public ColumnField getPrimaryKey() {
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
             Id primaryKey = field.getAnnotation(Id.class);
             if (primaryKey != null) {
-                return new IdField(field);
+                return new ColumnField(field);
             }
         }
         throw new IllegalArgumentException("No primary key found in class " + clss.getSimpleName());
@@ -144,8 +156,8 @@ public class Metamodel {
 
     }
 
-    public String buildSelectByForeignKey(Field field, Object id) {
-        return "select * from " + this.tableName + " where " + field.getAnnotation(ManyToOne.class).name() + "=" + id.toString();
+    public String buildSelectByForeignKey(Metamodel metamodel, Field field, Object id) {
+        return "select " + metamodel.getPrimaryKey().getName() + " from " + this.tableName + " where " + field.getAnnotation(ManyToOne.class).name() + "=" + id.toString();
     }
 
     public String buildCountRowsRequest() {
