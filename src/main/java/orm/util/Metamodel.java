@@ -33,7 +33,7 @@ public class Metamodel {
         return tableName;
     }
 
-    public List<ColumnField> getColumns() {
+    public List<ColumnField> getDatabaseColumns() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
@@ -45,7 +45,7 @@ public class Metamodel {
                 .toList();
     }
 
-    public List<ColumnField> getColumnsNew() {
+    public List<ColumnField> getAllColumnsExcludeId() {
         List<ColumnField> columnFields = new ArrayList<>();
         Field[] fields = clss.getDeclaredFields();
         for (Field field : fields) {
@@ -56,19 +56,6 @@ public class Metamodel {
                 .filter(el -> !el.getField().isAnnotationPresent(Id.class))
                 .toList();
     }
-
-    private List<ColumnField> getReferencesColumns() {
-        List<ColumnField> columnFields = new ArrayList<>();
-        Field[] fields = clss.getDeclaredFields();
-        for (Field field : fields) {
-            if(field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToOne.class)){
-                ColumnField columnField = new ColumnField(field);
-                columnFields.add(columnField);
-            }
-        }
-        return columnFields;
-    }
-
 
     public ColumnField getPrimaryKey() {
         Field[] fields = clss.getDeclaredFields();
@@ -90,7 +77,7 @@ public class Metamodel {
     }
 
     private String buildQuestionMarksElement() {
-        long count = getColumns()
+        long count = getDatabaseColumns()
                 .stream()
                 .filter(el -> el.getField().getAnnotation(Id.class) == null)
                 .count();
@@ -100,7 +87,7 @@ public class Metamodel {
     }
 
     private String buildColumnNames() {
-        return getColumns()
+        return getDatabaseColumns()
                 .stream()
                 .map(el -> {
                     if (el.getField().isAnnotationPresent(ManyToOne.class)) {
@@ -114,7 +101,7 @@ public class Metamodel {
 
     public String buildTableInDbRequest() {
         String id = getPrimaryKey().getName();
-        String columns = getColumns().stream()
+        String columns = getDatabaseColumns().stream()
                 .map(el -> {
                     if (el.getField().isAnnotationPresent(ManyToOne.class)) {
                         return el.getField().getAnnotation(ManyToOne.class).name() + " " + types.get(Metamodel.of(el.getType()).getPrimaryKey().getType());
@@ -132,7 +119,7 @@ public class Metamodel {
     }
 
     public String buildConstraintSqlRequest() {
-        return getColumns().stream()
+        return getDatabaseColumns().stream()
                 .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .map(el ->
                         "ALTER TABLE " + this.tableName +
@@ -166,7 +153,7 @@ public class Metamodel {
 
     public String buildMergeRequest() {
         String id = getPrimaryKey().getName();
-        String columns = getColumns().stream()
+        String columns = getDatabaseColumns().stream()
                 .map(el -> {
                     if (el.getField().isAnnotationPresent(ManyToOne.class)) {
                         return el.getField().getAnnotation(ManyToOne.class).name() + "=?";
@@ -180,24 +167,24 @@ public class Metamodel {
 
 
     public List<ColumnField> getOneToManyColumns() {
-        return getReferencesColumns().stream()
+        return getAllColumnsExcludeId().stream()
                 .filter(el -> el.getField().isAnnotationPresent(OneToMany.class))
                 .toList();
     }
 
     public List<ColumnField> getManyToOneColumns() {
-        return getReferencesColumns().stream()
+        return getAllColumnsExcludeId().stream()
                 .filter(el -> el.getField().isAnnotationPresent(ManyToOne.class))
                 .toList();
     }
 
     public boolean isOneToManyPresent() {
-        return getReferencesColumns()
+        return getAllColumnsExcludeId()
                 .stream().anyMatch(el -> el.getField().isAnnotationPresent(OneToMany.class));
     }
 
     public boolean isManyToOnePresent() {
-        return getReferencesColumns()
+        return getAllColumnsExcludeId()
                 .stream().anyMatch(el -> el.getField().isAnnotationPresent(ManyToOne.class));
     }
 }
