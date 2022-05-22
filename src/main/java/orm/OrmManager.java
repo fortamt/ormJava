@@ -1,6 +1,7 @@
 package orm;
 
 
+import orm.annotation.Id;
 import orm.annotation.ManyToOne;
 import orm.annotation.OneToMany;
 import orm.util.ColumnField;
@@ -246,7 +247,7 @@ public class OrmManager {
     private class PreparedStatementWrapper {
 
         private PreparedStatement statement;
-        int index = 1;
+        private int index = 1;
 
         public PreparedStatementWrapper(PreparedStatement statement) {
             this.statement = statement;
@@ -298,13 +299,12 @@ public class OrmManager {
     private <T> T buildInstanceFrom(Class<T> clss, ResultSet resultSet, Object id) throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, SQLException {
 
         Metamodel metamodel = Metamodel.of(clss);
-
         T t = clss.getConstructor().newInstance();
         Field primaryKeyField = metamodel.getPrimaryKey().getField();
         String primaryKeyColumnName = metamodel.getPrimaryKey().getName();
         Class<?> primaryKeyType = primaryKeyField.getType();
         resultSet.next();
-        setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType);
+        setFieldValue(resultSet, t, primaryKeyField, primaryKeyColumnName, primaryKeyType, id);
         putInCache(t);
 
         for (ColumnField columnField : metamodel.getAllColumnsExcludeId()) {
@@ -312,50 +312,43 @@ public class OrmManager {
             field.setAccessible(true);
             Class<?> columnType = columnField.getType();
             String columnName = columnField.getName();
-            if (field.isAnnotationPresent(ManyToOne.class)) {
-                setFieldValue(resultSet, t, field, columnName);
-            } else if (field.isAnnotationPresent(OneToMany.class)) {
-                setFieldValue(t, field, id);
-            } else {
-                setFieldValue(resultSet, t, field, columnName, columnType);
-            }
+            setFieldValue(resultSet, t, field, columnName, columnType, id);
         }
         return t;
     }
 
-    private <T> void setFieldValue(T t, Field field, Object id) throws SQLException, IllegalAccessException {
-        List<Object> resultList = new ArrayList<>();
-        List<Long> idList = new ArrayList<>();
-        Metamodel metamodel = Metamodel.of(getGenericTypeOfList(field.getName(), t.getClass()));
-        for (ColumnField manyToOneColumn : metamodel.getManyToOneColumns()) {
-            if (manyToOneColumn.getType() == t.getClass()) {
-                String sql = metamodel.buildSelectByForeignKey(metamodel, manyToOneColumn.getField(), id);
-                try (PreparedStatement innerStatement = connection.prepareStatement(sql); ResultSet innerResultSet = innerStatement.executeQuery()) {
-                    while (innerResultSet.next()) {
-                        var temp = innerResultSet.getLong(1);
-                        idList.add(temp);
+    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType, Object id) throws IllegalAccessException, SQLException {
+        if (field.isAnnotationPresent(OneToMany.class)) {
+            List<Object> resultList = new ArrayList<>();
+            List<Long> idList = new ArrayList<>();
+            Metamodel metamodel = Metamodel.of(getGenericTypeOfList(field.getName(), t.getClass()));
+            for (ColumnField manyToOneColumn : metamodel.getManyToOneColumns()) {
+                if (manyToOneColumn.getType() == t.getClass()) {
+                    String sql = metamodel.buildSelectByForeignKey(metamodel, manyToOneColumn.getField(), id);
+                    try (PreparedStatement innerStatement = connection.prepareStatement(sql); ResultSet innerResultSet = innerStatement.executeQuery()) {
+                        while (innerResultSet.next()) {
+                            var temp = innerResultSet.getLong(1);
+                            idList.add(temp);
+                        }
                     }
                 }
             }
+            for (Long el : idList) {
+                resultList.add(load(el, metamodel.getClss()));
+            }
+            field.set(t, resultList);
+        } else if (field.isAnnotationPresent(ManyToOne.class)) {
+            var primaryKey = resultSet.getObject(columnName, Long.class);
+            var key = load(primaryKey, field.getType());
+            field.set(t, key);
+        } else if (field.isAnnotationPresent(Id.class)) {
+            var key = resultSet.getObject(columnName, keyType);
+            field.setAccessible(true);
+            field.set(t, key);
+        } else {
+            var key = resultSet.getObject(columnName, keyType);
+            field.set(t, key);
         }
-        for (Long el : idList) {
-            resultList.add(load(el, metamodel.getClss()));
-        }
-        field.setAccessible(true);
-        field.set(t, resultList);
-    }
-
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName) throws SQLException, IllegalAccessException {
-        var primaryKey = resultSet.getObject(columnName, Long.class);
-        var key = load(primaryKey, field.getType());
-        field.setAccessible(true);
-        field.set(t, key);
-    }
-
-    private <T> void setFieldValue(ResultSet resultSet, T t, Field field, String columnName, Class<?> keyType) throws SQLException, IllegalAccessException {
-        var key = resultSet.getObject(columnName, keyType);
-        field.setAccessible(true);
-        field.set(t, key);
     }
 
     private <T> void setFieldValue(Field field, T t, Object value) throws IllegalAccessException {
