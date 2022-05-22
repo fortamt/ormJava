@@ -70,42 +70,31 @@ public class OrmManager {
     private class PreparedStatementWrapper {
 
         private PreparedStatement statement;
+        int index = 1;
 
         public PreparedStatementWrapper(PreparedStatement statement) {
             this.statement = statement;
         }
 
         public <T> PreparedStatement andParameters(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
+            index = 1;
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getDatabaseColumns().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getDatabaseColumns().get(columnIndex);
-                Class<?> fieldType = columnField.getType();
-                Field field = columnField.getField();
-                field.setAccessible(true);
-                Object value = field.get(t);
-                if (fieldType == int.class || fieldType == long.class) {
-                    statement.setInt(columnIndex + 1, (int) value);
-                } else if (fieldType == double.class || fieldType == float.class) {
-                    statement.setFloat(columnIndex + 1, (float) value);
-                } else if (fieldType == String.class) {
-                    statement.setString(columnIndex + 1, (String) value);
-                } else if (fieldType == LocalDate.class) {
-                    LocalDate localDate = (LocalDate) value;
-                    java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
-                    statement.setDate(columnIndex + 1, new Date(date.getTime()));
-                }
-                if (field.isAnnotationPresent(ManyToOne.class)) {
+            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
+                if (databaseColumn.getField().isAnnotationPresent(ManyToOne.class)) {
                     for (var el : getListManyToOne(t)) {
                         if (el != null) {
                             Metamodel metamodelForManyToOne = Metamodel.of(el.getClass());
                             Field fieldForManyToOne = metamodelForManyToOne.getPrimaryKey().getField();
                             fieldForManyToOne.setAccessible(true);
                             Object idToInsert = fieldForManyToOne.get(el);
-                            statement.setObject(columnIndex + 1, idToInsert);
+                            statement.setObject(index++, idToInsert);
                         } else {
-                            statement.setNull(columnIndex + 1, 4); //4 is SQL type code for integer
+                            statement.setNull(index++, 4); //4 is SQL type code for integer
                         }
                     }
+                } else {
+                    databaseColumn.getField().setAccessible(true);
+                    statement.setObject(index++, databaseColumn.getField().get(t));
                 }
             }
             return statement;
@@ -113,27 +102,12 @@ public class OrmManager {
 
         public <T> PreparedStatement andParametersAndKey(T t) throws SQLException, IllegalArgumentException, IllegalAccessException {
             Metamodel metamodel = Metamodel.of(t.getClass());
-            for (int columnIndex = 0; columnIndex < metamodel.getDatabaseColumns().size(); columnIndex++) {
-                ColumnField columnField = metamodel.getDatabaseColumns().get(columnIndex);
-                Class<?> fieldType = columnField.getType();
-                Field field = columnField.getField();
-                field.setAccessible(true);
-                Object value = field.get(t);
-                if (fieldType == int.class || fieldType == long.class) {
-                    statement.setInt(columnIndex + 1, (int) value);
-                } else if (fieldType == double.class || fieldType == float.class) {
-                    statement.setFloat(columnIndex + 1, (float) value);
-                } else if (fieldType == String.class) {
-                    statement.setString(columnIndex + 1, (String) value);
-                } else if (fieldType == LocalDate.class) {
-                    LocalDate localDate = (LocalDate) value;
-                    java.util.Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
-                    statement.setDate(columnIndex + 1, new Date(date.getTime()));
-                }
+            for (ColumnField databaseColumn : metamodel.getDatabaseColumns()) {
+                databaseColumn.getField().setAccessible(true);
+                statement.setObject(index++, databaseColumn.getField().get(t));
             }
-
             Object value = getPrimaryKeyValue(t);
-            statement.setLong(metamodel.getDatabaseColumns().size() + 1, (Long) value);
+            statement.setObject(index++, value);
             return statement;
         }
 
