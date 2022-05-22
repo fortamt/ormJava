@@ -1,6 +1,7 @@
 package orm;
 
 
+import orm.annotation.Entity;
 import orm.annotation.Id;
 import orm.annotation.ManyToOne;
 import orm.annotation.OneToMany;
@@ -46,6 +47,9 @@ public class OrmManager {
     public void registerEntities(Class<?>... entityClasses) {
         // prepare MetaInfo, create the tables in the DB
         for (Class<?> clss : entityClasses) {
+            if(!clss.isAnnotationPresent(Entity.class)){
+                break;
+            }
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildTableInDbRequest();
             try (Statement statement = connection.createStatement()) {
@@ -56,6 +60,9 @@ public class OrmManager {
         }
 
         for (Class<?> clss : entityClasses) {
+            if(!clss.isAnnotationPresent(Entity.class)){
+                break;
+            }
             Metamodel metamodel = Metamodel.of(clss);
             String sql = metamodel.buildConstraintSqlRequest();
             try (Statement statement = connection.createStatement()) {

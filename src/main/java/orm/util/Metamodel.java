@@ -20,7 +20,7 @@ public class Metamodel {
         return new Metamodel(clss);
     }
 
-    public Metamodel(Class<?> clss) {
+    private Metamodel(Class<?> clss) {
         this.clss = clss;
         this.tableName = this.clss.getAnnotation(Table.class).name().equals("") ? clss.getName() : this.clss.getAnnotation(Table.class).name();
     }
@@ -74,29 +74,6 @@ public class Metamodel {
 
         return "insert into " + this.clss.getSimpleName() +
                 " (" + columnElement + ") values (" + questionMarksElement + ")";
-    }
-
-    private String buildQuestionMarksElement() {
-        long count = getDatabaseColumns()
-                .stream()
-                .filter(el -> el.getField().getAnnotation(Id.class) == null)
-                .count();
-        return IntStream.range(0, (int) count)
-                .mapToObj(index -> "?")
-                .collect(Collectors.joining(", "));
-    }
-
-    private String buildColumnNames() {
-        return getDatabaseColumns()
-                .stream()
-                .map(el -> {
-                    if (el.getField().isAnnotationPresent(ManyToOne.class)) {
-                        return el.getField().getAnnotation(ManyToOne.class).name();
-                    } else {
-                        return el.getName();
-                    }
-                })
-                .collect(Collectors.joining(", "));
     }
 
     public String buildTableInDbRequest() {
@@ -186,6 +163,29 @@ public class Metamodel {
     public boolean isManyToOnePresent() {
         return getAllColumnsExcludeId()
                 .stream().anyMatch(el -> el.getField().isAnnotationPresent(ManyToOne.class));
+    }
+
+    private String buildQuestionMarksElement() {
+        long count = getDatabaseColumns()
+                .stream()
+                .filter(el -> el.getField().getAnnotation(Id.class) == null)
+                .count();
+        return IntStream.range(0, (int) count)
+                .mapToObj(index -> "?")
+                .collect(Collectors.joining(", "));
+    }
+
+    private String buildColumnNames() {
+        return getDatabaseColumns()
+                .stream()
+                .map(el -> {
+                    if (el.getField().isAnnotationPresent(ManyToOne.class)) {
+                        return el.getField().getAnnotation(ManyToOne.class).name();
+                    } else {
+                        return el.getName();
+                    }
+                })
+                .collect(Collectors.joining(", "));
     }
 }
 
